@@ -7,11 +7,16 @@ import datetime
 import time
 import os
 
+from transformers import pipeline
+
 # only so that whisper can download different models
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
 whisperModel = whisper.load_model("base")
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+textGenerator = pipeline("text-generation", model="gpt2")
 
 # Initialize PyAudio
 p = pyaudio.PyAudio()
@@ -37,7 +42,7 @@ def startStream():
                     frames_per_buffer=1024)
 
 def speak(text, filename):
-    return os.system(f"gtts-cli \"1, 2, ${text}\" --lang en --tld com.au --output \"tx-{filename}\"")
+    return os.system(f"gtts-cli \"1, 2, ${text}\" --lang en --tld co.uk --output \"tx-{filename}\"")
 
 frames = []
 recording = False
@@ -106,7 +111,7 @@ while True:
     
     current_time = time.time()
     
-    #level = sum([abs(i) for i in audio_data])
+    # TODO: find a way to replace rms because audioop is going away next python version
     level = audioop.rms(data, 2)
 
     print(level, end="\r")
@@ -126,7 +131,7 @@ while True:
         # Check for max duration
         if start_time and current_time - start_time >= MAX_DURATION:
             print("Max duration reached, terminating.")
-            break
+            recording = False
 
     # sound is too quiet
     else:
@@ -145,27 +150,32 @@ while True:
                     wf.writeframes(b''.join(frames))
                     wf.close()
             
-                    transcription = whisperModel.transcribe(f"rx-{filename}")
+                    # fp16 is false because it generates a warning (at least on macos)
+                    transcription = whisperModel.transcribe(f"rx-{filename}", fp16=False)
                     transcription = transcription['text'].strip(" .,\n").lower()
 
                     print(f'transcription: \"{transcription}\"')
 
                     if len(transcription) > 0:
-                        if transcription.endswith("control"):
-                            lastUnit = transcription[0:transcription.find("control")]
-                            speak("control, go ahead", filename)
-                        elif (len(lastUnit) > 0):
-                            if transcription in availablePhrases:
-                                speak("control is clear {$lastUnit}, you're in service", filename)
-                            elif transcription in availablePhrases:
-                                speak("control is clear {$lastUnit}, you're out of service", filename)
-                            else: # repeat back what they said
-                                speak(lastUnit + " unable to copy", filename)
-                        else: # repeat back what they said
-                            speak(transcription, filename)
+                        #if transcription.endswith("control"):
+                        #    lastUnit = transcription[0:transcription.find("control")]
+                        #    speak("control, go ahead", filename)
+                        #elif (len(lastUnit) > 0):
+                        #    if transcription in availablePhrases:
+                        #        speak("control is clear {$lastUnit}, you're in service", filename)
+                        #    elif transcription in availablePhrases:
+                        #        speak("control is clear {$lastUnit}, you're out of service", filename)
+                        #    else: # repeat back what they said
+                        #        speak(lastUnit + " unable to copy", filename)
+                        #else: # repeat back what they said
+                        #    speak(transcription, filename)
+
+                        generatedResponse = textGenerator(transcription)
+
+                        speak(generatedResponse[0]['generated_text'], filename)
 
                         # play the generated speech file
-                        os.system(f"afplay \"tx-{filename}\"")
+                        os.system(f"afplay -r 1.3 \"tx-{filename}\"")
 
                         # delete the generated speech file
                         os.remove(f"tx-{filename}")
