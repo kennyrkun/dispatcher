@@ -6,8 +6,7 @@ import struct
 import datetime
 import time
 import os
-
-from transformers import pipeline
+import requests
 
 # only so that whisper can download different models
 import ssl
@@ -15,8 +14,17 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 whisperModel = whisper.load_model("base")
 
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-textGenerator = pipeline("text-generation", model="gpt2")
+def promptResponse(string):
+    request = requests.post("https://localhost:11434/api/generate", {
+        "model": "llama3.2",
+        "stream": False,
+        "prompt": string
+    })
+
+    return request.json();
+
+def speak(text, filename):
+    return os.system(f"gtts-cli \"1, 2, ${text}\" --lang en --tld co.uk --output \"tx-{filename}\"")
 
 # Initialize PyAudio
 p = pyaudio.PyAudio()
@@ -40,9 +48,6 @@ def startStream():
                     rate=44100,
                     input=True,
                     frames_per_buffer=1024)
-
-def speak(text, filename):
-    return os.system(f"gtts-cli \"1, 2, ${text}\" --lang en --tld co.uk --output \"tx-{filename}\"")
 
 frames = []
 recording = False
@@ -170,9 +175,9 @@ while True:
                         #else: # repeat back what they said
                         #    speak(transcription, filename)
 
-                        generatedResponse = textGenerator(transcription)
+                        response = promptResponse(transcription)
 
-                        speak(generatedResponse[0]['generated_text'], filename)
+                        speak(response.get("response"), filename)
 
                         # play the generated speech file
                         os.system(f"afplay -r 1.3 \"tx-{filename}\"")
