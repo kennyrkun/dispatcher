@@ -91,6 +91,9 @@ def generateSpokenResponse(text, filename):
 
     return os.system(f"gtts-cli \"1, 2, ${text}\" --lang en --output \"{save_path}/tx-{filename}\"")
 
+def ffplay(filename, args = ""):
+    return os.system(f"ffplay {args} \"{filename}\" -autoexit -nodisp")
+
 def processLoop():
     frames = []
     recording = False
@@ -106,6 +109,7 @@ def processLoop():
     )
 
     print("Started stream, beginning processing...")
+    print("") # new line to prevent audio level from overwriting things
 
     while True:
         data = stream.read(1024)
@@ -191,7 +195,7 @@ def processLoop():
                             generateSpokenResponse(response, filename)
 
                             # play the generated speech file
-                            os.system(f"afplay -r 1.3 \"{save_path}/tx-{filename}\"")
+                            ffplay(f"{save_path}/tx-{filename}", "-af 'atempo=1.3'")
 
                             # delete the generated speech file
                             os.remove(f"{save_path}/tx-{filename}")
