@@ -1,0 +1,1 @@
+requires ffmpeg (and ffplay) to be installed on the system and usable from the commandline
