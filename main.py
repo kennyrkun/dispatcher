@@ -115,12 +115,15 @@ def processLoop():
         # TODO: find a way to replace rms because audioop is going away next python version
         level = audioop.rms(data, 2)
         
-        print(f"Audio level: {level}", end="\r")
+        sys.stdout.write("\033[F") # up one line
+        print(f"Audio level: {level}")
+        sys.stdout.write("\033[K") # clear to end of line
 
         # sound is loud enough to record, or the pad duration has not elapsed
         if level > THRESHOLD or last_detection_time + PAD_DURATION > current_time:
             if not recording:
                 print("Sound detected at level ", level, " starting recording...")
+                print("") # new line to prevent audio level from overwriting things
                 start_time = current_time  # Initialize the start time
 
             recording = True
@@ -203,6 +206,7 @@ def processLoop():
                 recording = False
                 frames = []
                 start_time = None
+                print("") # new line to prevent audio level from overwriting things
 
 while True:
     try:
