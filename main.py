@@ -86,7 +86,7 @@ def promptResponse(string):
 
     return request.json()
 
-def speak(text, filename):
+def generateSpokenResponse(text, filename):
     global save_path
 
     return os.system(f"gtts-cli \"1, 2, ${text}\" --lang en --output \"{save_path}/tx-{filename}\"")
@@ -163,16 +163,16 @@ def processLoop():
                         if len(transcription) > 0:
                             #if transcription.endswith("control"):
                             #    lastUnit = transcription[0:transcription.find("control")]
-                            #    speak("control, go ahead", filename)
+                            #    generateSpokenResponse("control, go ahead", filename)
                             #elif (len(lastUnit) > 0):
                             #    if transcription in availablePhrases:
-                            #        speak("control is clear {$lastUnit}, you're in service", filename)
+                            #        generateSpokenResponse("control is clear {$lastUnit}, you're in service", filename)
                             #    elif transcription in availablePhrases:
-                            #        speak("control is clear {$lastUnit}, you're out of service", filename)
+                            #        generateSpokenResponse("control is clear {$lastUnit}, you're out of service", filename)
                             #    else: # repeat back what they said
-                            #        speak(lastUnit + " unable to copy", filename)
+                            #        generateSpokenResponse(lastUnit + " unable to copy", filename)
                             #else: # repeat back what they said
-                            #    speak(transcription, filename)
+                            #    generateSpokenResponse(transcription, filename)
 
                             response = promptResponse(transcription)
 
@@ -185,7 +185,7 @@ def processLoop():
 
                             print(f"Response: {response}")
 
-                            speak(response, filename)
+                            generateSpokenResponse(response, filename)
 
                             # play the generated speech file
                             os.system(f"afplay -r 1.3 \"{save_path}/tx-{filename}\"")
