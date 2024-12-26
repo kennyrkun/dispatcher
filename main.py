@@ -1,12 +1,49 @@
-import pyaudio
-import wave
+import argparse
+
+parser = argparse.ArgumentParser(
+    prog = "Dispatcher",
+    description = "Uses AI to transcribe messages from an audio input, then generate a response based on that message and play it to an output."
+)
+
+parser.add_argument("-mdc",
+    action = "store_true",
+    help = "play an mdc squak after finished transmitting"
+)
+
+parser.add_argument("-saveSpokenAudio",
+    action = "store_true",
+    help = "do not delete audio files containing spoken responses"
+)
+
+parser.add_argument("-saveReceivedAudio",
+    action = "store_false",
+    help = "do not delete files containing received transmission audio"
+)
+
+parser.add_argument("-delayTone",
+    type = int,
+    default = 5,
+    help = "how long to wait before generateSpokenResponseing while playing a tone, in seconds"
+)
+
+parser.add_argument("-delay",
+    type = int,
+    help = "how long to wait before generateSpokenResponseing, in seconds"
+)
+
+flags = parser.parse_args()
+
+print(flags.__dict__)
+
 import audioop
-import whisper
-import struct
 import datetime
-import time
 import os
+import pyaudio
 import requests
+import sys
+import time
+import wave
+import whisper
 
 # only so that whisper can download different models
 import ssl
@@ -18,7 +55,7 @@ whisperModel = whisper.load_model("base")
 p = pyaudio.PyAudio()
 
 # Sound level threshold for starting/stopping recording
-THRESHOLD = 500  # Adjust as needed
+THRESHOLD = 800  # Adjust as needed
 
 # Duration limits in seconds
 MIN_DURATION = 1
@@ -89,7 +126,13 @@ def promptResponse(string):
 def generateSpokenResponse(text, filename):
     global save_path
 
-    return os.system(f"gtts-cli \"1, 2, ${text}\" --lang en --output \"{save_path}/tx-{filename}\"")
+    return os.system(f"gtts-cli \"{text}\" --lang en --output \"{save_path}/tx-{filename}\"")
+
+def playTone(freq = 1000, length = 5):
+    os.system(f"ffmpeg -f lavfi -i 'sine=frequency={freq}:duration={length}' tone.wav -autoexit -nodisp")
+    # TODO: use a generic audio player
+    os.system("ffplay tone.wav")
+    os.remove("tone.wav")
 
 def ffplay(filename, args = ""):
     return os.system(f"ffplay {args} \"{filename}\" -autoexit -nodisp")
@@ -165,6 +208,9 @@ def processLoop():
                         transcription = whisperModel.transcribe(f"{save_path}/rx-{filename}", fp16=False)
                         transcription = transcription['text'].strip(" .,\n").lower()
 
+                        if not flags.saveReceivedAudio:
+                            os.remove(f"{save_path}/rx-{filename}")
+
                         print(f'transcription: \"{transcription}\"')
 
                         if len(transcription) > 0:
@@ -197,13 +243,18 @@ def processLoop():
                             # play the generated speech file
                             ffplay(f"{save_path}/tx-{filename}", "-af 'atempo=1.3'")
 
+                            if flags.mdc:
+                                ffplay(f"{save_path}/MDC1200.wav")
+
                             # delete the generated speech file
-                            os.remove(f"{save_path}/tx-{filename}")
-                        else:
+                            if not flags.saveSpokenAudio:
+                                os.remove(f"{save_path}/tx-{filename}")
+
+                        # TODO: last unit was unreadable
+                        elif os.path.isfile(f"{save_path}/rx-{filename}"):
                             # rename the received audio to failed so we know
                             os.rename(f"{save_path}/rx-{filename}", f"failed-rx-{filename}")
                     else:
-                        # TODO: last unit was unreadable
                         print(f"Sound stopped, discarding audio... Duration: {duration: .2f} seconds")
                     
                 # Reset recording states
