@@ -21,13 +21,13 @@ parser.add_argument("-saveReceivedAudio",
 )
 
 parser.add_argument("-delayTone",
-    type = int,
-    default = 5,
+    type = float,
+    default = 1.5,
     help = "how long to wait before generateSpokenResponseing while playing a tone, in seconds"
 )
 
 parser.add_argument("-delay",
-    type = int,
+    type = float,
     help = "how long to wait before generateSpokenResponseing, in seconds"
 )
 
@@ -128,14 +128,14 @@ def generateSpokenResponse(text, filename):
 
     return os.system(f"gtts-cli \"{text}\" --lang en --output \"{save_path}/tx-{filename}\"")
 
-def playTone(freq = 1000, length = 5):
-    os.system(f"ffmpeg -f lavfi -i 'sine=frequency={freq}:duration={length}' tone.wav -autoexit -nodisp")
-    # TODO: use a generic audio player
-    os.system("ffplay tone.wav")
-    os.remove("tone.wav")
-
 def ffplay(filename, args = ""):
     return os.system(f"ffplay {args} \"{filename}\" -autoexit -nodisp")
+
+def playTone(freq = 1000, length = 5):
+    os.system(f"ffmpeg -f lavfi -i 'sine=frequency={freq}:duration={length}' tone.wav")
+    # TODO: use a generic audio player
+    ffplay("tone.wav")
+    os.remove("tone.wav")
 
 def processLoop():
     frames = []
@@ -237,6 +237,11 @@ def processLoop():
                             response = response.get("response")
 
                             print(f"Response: {response}")
+
+                            if flags.delayTone is not None:
+                                playTone(1000, flags.delayTone)
+                            elif flags.delay is not None:
+                                time.sleep(flags.delay)
 
                             generateSpokenResponse(response, filename)
 
