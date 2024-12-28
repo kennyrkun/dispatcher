@@ -39,7 +39,7 @@ parser.add_argument("-saveReceivedAudio",
 parser.add_argument("-delayNoise",
     type = float,
     default = 0.3,
-    help = "how long to wait before generateSpokenResponseing while playing a tone, in seconds"
+    help = "plays noise for x seconds to help a radio open vox"
 )
 
 parser.add_argument("-delayNoiseVolume",
