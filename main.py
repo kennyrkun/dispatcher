@@ -39,6 +39,30 @@ parser.add_argument("-delay",
     help = "how long to wait before generateSpokenResponseing, in seconds"
 )
 
+parser.add_argument("-minDuration",
+    type = float,
+    default = 1,
+    help = "received transmission must be at least this long in seconds to be considered"
+)
+
+parser.add_argument("-padDuration",
+    type = float,
+    default = 2.5,
+    help = "how long in seconds to keep listening before a received transmission is considered to be over"
+)
+
+parser.add_argument("-maxDuration",
+    type = float,
+    default = 30,
+    help = "max duration of a transmission in seconds"
+)
+
+parser.add_argument("-threshold",
+    type = int,
+    default = 800,
+    help = "start recording once audio levels are above this value. when audio levels are below, the recording will be considered to be over."
+)
+
 flags = parser.parse_args()
 
 print(flags.__dict__)
@@ -64,16 +88,9 @@ whisperModel = whisper.load_model("base")
 # Initialize PyAudio
 p = pyaudio.PyAudio()
 
-# Sound level threshold for starting/stopping recording
-THRESHOLD = 800  # Adjust as needed
-
-# Duration limits in seconds
-MIN_DURATION = 1
-PAD_DURATION = 2.5 # if we are already recording, wait this long before we stop
-MAX_DURATION = 30
-
 # Save file path
-save_path = os.path.join(os.path.expanduser('~'), 'Documents/GitHub/dispatcher')
+workingDirectory = os.path.join(os.path.expanduser('~'), 'Documents/GitHub/dispatcher')
+recordingDirectory = os.path.join(workingDirectory, "recordings")
 soundsDirectory = os.path.join(workingDirectory, "sounds")
 
 lastUnit = ""
@@ -137,16 +154,16 @@ def promptResponse(string):
     return request.json()
 
 def generateSpokenResponse(text, filename):
-    global save_path
+    global workingDirectory
 
     print("Generating response audio...")
 
-    return subprocess.check_call(
+    subprocess.check_call(
         [
             "gtts-cli",
             #"--debug",
             #"--lang", "en",
-            "--output", f"{save_path}/tx-{filename}",
+            "--output", filename,
             text
         ],
         stdout=sys.stdout,
@@ -195,7 +212,7 @@ def processLoop():
         print(f"Audio level: {level}")
 
         # sound is loud enough to record, or the pad duration has not elapsed
-        if level > THRESHOLD or last_detection_time + PAD_DURATION > current_time:
+        if level > flags.threshold or last_detection_time + flags.padDuration > current_time:
             if not recording:
                 clearPreviousLine()
                 print("Sound detected at level ", level, " starting recording...")
@@ -205,11 +222,11 @@ def processLoop():
             recording = True
             frames.append(data)
 
-            if level > THRESHOLD:
+            if level > flags.threshold:
                 last_detection_time = current_time
             
             # Check for max duration
-            if start_time and current_time - start_time >= MAX_DURATION:
+            if start_time and current_time - start_time >= flags.maxDuration:
                 clearPreviousLine()
                 print("Max duration reached, terminating.")
                 recording = False
@@ -219,28 +236,28 @@ def processLoop():
             if recording:
                 duration = current_time - start_time
 
-                if last_detection_time + PAD_DURATION < current_time:
-                    if duration >= MIN_DURATION:
+                if last_detection_time + flags.padDuration < current_time:
+                    if duration >= flags.minDuration:
                         clearPreviousLine()
                         print(f"Sound stopped at level {level} with duration of {duration: .2f} seconds")
                         # Save the audio
                         filename = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.wav"
-                        wf = wave.open(f"{save_path}/rx-{filename}", 'wb')
+                        wf = wave.open(f"{recordingDirectory}/rx-{filename}", 'wb')
                         wf.setnchannels(1)
                         wf.setsampwidth(p.get_sample_size(pyaudio.paInt16))
                         wf.setframerate(44100)
                         wf.writeframes(b''.join(frames))
                         wf.close()
 
-                        if not os.path.isfile(f"{save_path}/rx-{filename}"):
+                        if not os.path.isfile(f"{recordingDirectory}/rx-{filename}"):
                             raise Exception("File for received audio did not exist to transcribe.")
                 
                         # fp16 is false because it generates a warning (at least on macos)
-                        transcription = whisperModel.transcribe(f"{save_path}/rx-{filename}", fp16=False)
+                        transcription = whisperModel.transcribe(f"{recordingDirectory}/rx-{filename}", fp16=False)
                         transcription = transcription['text'].strip(" .,\n").lower()
 
                         if not flags.saveReceivedAudio:
-                            os.remove(f"{save_path}/rx-{filename}")
+                            os.remove(f"{recordingDirectory}/rx-{filename}")
 
                         print(f'transcription: \"{transcription}\"')
 
@@ -269,7 +286,7 @@ def processLoop():
 
                             print(f"Response: {response}")
 
-                            generateSpokenResponse(response, filename)
+                            generateSpokenResponse(response, f"{recordingDirectory}/tx-{filename}")
 
                             # if delayTone is 0, the program will hang.
                             if flags.delayTone is not None and flags.delayTone > 0:
@@ -278,7 +295,7 @@ def processLoop():
                                 time.sleep(flags.delay)
 
                             # play the generated speech file
-                            ffplay(f"{save_path}/tx-{filename}", "-af 'atempo=1.3'")
+                            ffplay(f"{recordingDirectory}/tx-{filename}", "-af 'atempo=1.3'")
 
                             if flags.mdc == "1200":
                                 ffplay(f"{soundsDirectory}/mdc_eot/MDC1200.wav")
@@ -293,12 +310,12 @@ def processLoop():
 
                             # delete the generated speech file
                             if not flags.saveSpokenAudio:
-                                os.remove(f"{save_path}/tx-{filename}")
+                                os.remove(f"{recordingDirectory}/tx-{filename}")
 
                         # TODO: last unit was unreadable
-                        elif os.path.isfile(f"{save_path}/rx-{filename}"):
-                            # rename the received audio to failed so we know
-                            os.rename(f"{save_path}/rx-{filename}", f"failed-rx-{filename}")
+                        elif os.path.isfile(f"{recordingDirectory}/rx-{filename}"):
+                            # rename the received audio to failed so we know. failed can't come after filename because filename contains .wav
+                            os.rename(f"{recordingDirectory}/rx-{filename}", f"{recordingDirectory}/rx-failed-{filename}")
                     else:
                         print(f"Sound stopped, discarding audio... Duration: {duration: .2f} seconds")
                     
