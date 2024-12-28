@@ -1,1 +1,7 @@
-requires ffmpeg (and ffplay) to be installed on the system and usable from the commandline
+# Thirdy Party Credits
+- Radio sounds are from http://www.w2sjw.com/.
+
+# Requirements
+- ffmpeg
+- ffplay
+- gtts-cli
