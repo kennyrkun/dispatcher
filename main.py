@@ -13,8 +13,8 @@ parser.add_argument("-mdc",
         "random"
     ],
     nargs = "?",
-    default = "1200",
-    const = "1200",
+    default = "1200-fdny",
+    const = "1200-fdny",
     help = "simulate mdc tones"
 )
 
@@ -36,10 +36,16 @@ parser.add_argument("-saveReceivedAudio",
     help = "save files containing received transmission audio"
 )
 
-parser.add_argument("-delayTone",
+parser.add_argument("-delayNoise",
     type = float,
-    default = 1.5,
+    default = 0.3,
     help = "how long to wait before generateSpokenResponseing while playing a tone, in seconds"
+)
+
+parser.add_argument("-delayNoiseVolume",
+    type = float,
+    default = 1,
+    help = "volume to play delayNoise at"
 )
 
 parser.add_argument("-delay",
@@ -69,6 +75,18 @@ parser.add_argument("-threshold",
     type = int,
     default = 800,
     help = "start recording once audio levels are above this value. when audio levels are below, the recording will be considered to be over."
+)
+
+parser.add_argument("-voiceVolume",
+    type = float,
+    default = 1,
+    help = "volume the voice is played back at"
+)
+
+parser.add_argument("-soundsVolume",
+    type = float,
+    default = 0.5,
+    help = "volume sounds other than the voice are played back at"
 )
 
 parser.add_argument("-voiceEngine",
@@ -224,10 +242,17 @@ def ffplay(filename, args = ""):
     print(f"Playing file {filename}...")
     return os.system(f"ffplay {args} \"{filename}\" -autoexit -nodisp -hide_banner -loglevel error")
 
-def playTone(freq = 300, lengthSeconds = 5):
-    print(f"Playing {freq}hz tone for {lengthSeconds} seconds...")
+def playVoice(filename):
+    return ffplay(filename, f"-af 'volume={flags.voiceVolume}' -af 'atempo={flags.voiceSpeed}'")
+
+def playSound(soundName):
+    print(f"Playing file {soundName}...")
+    return ffplay(f"{soundsDirectory}/{soundName}.wav", f"-af 'volume={flags.soundsVolume}'")
+
+def playNoise(lengthSeconds = 5):
+    print(f"Playing noise for {lengthSeconds} seconds...")
     # does not use ffplay function bc that calls a file
-    os.system(f"ffplay -f lavfi 'anoisesrc=a=0.1:c=white:d={lengthSeconds}' -autoexit -nodisp -hide_banner -loglevel error")
+    os.system(f"ffplay -f lavfi 'anoisesrc=a=0.1:c=white:d={lengthSeconds}' -af 'volume={flags.delayNoiseVolume}' -autoexit -nodisp -hide_banner -loglevel error")
 
 def clearPreviousLine():
     print("\033[A", end="\r")
@@ -346,23 +371,24 @@ def processLoop():
 
                             generateSpokenResponse(response, f"{recordingDirectory}/tx-{filename}")
 
-                            # if delayTone is 0, the program will hang.
-                            if flags.delayTone is not None and flags.delayTone > 0:
-                                playTone(lengthSeconds = flags.delayTone)
+                            # if delayNoise is 0, the program will hang.
+                            if flags.delayNoise is not None and flags.delayNoise > 0:
+                                playNoise(lengthSeconds = flags.delayNoise)
                             elif flags.delay is not None:
                                 time.sleep(flags.delay)
 
                             # play the generated speech file
-                            ffplay(f"{recordingDirectory}/tx-{filename}", f"-af 'atempo={flags.voiceSpeed}'")
+                            playVoice(f"{recordingDirectory}/tx-{filename}")
 
                             if flags.mdc == "1200":
-                                ffplay(f"{soundsDirectory}/mdc_eot/MDC1200.wav")
+                                playSound("mdc_eot/MDC1200")
                             elif flags.mdc == "1200-fdny":
-                                ffplay(f"{soundsDirectory}/mdc_eot/Saber1200.wav")
+                                playSound("mdc_eot/Saber1200")
                             elif flags.mdc == "1200-dos":
-                                ffplay(f"{soundsDirectory}/mdc_eot/MDC1200-DOS.wav")
+                                playSound("mdc_eot/MDC1200-DOS")
                             elif flags.mdc == "random":
-                                ffplay(f"{soundsDirectory}/mdc_eot/" + random.choice(os.listdir(f"{soundsDirectory}/mdc_eot")))
+                                # finds a random ifle in the mdc_eot directory and removes the last 4 chars from it (.wav)
+                                playSound("mdc_eot/" + random.choice(os.listdir(f"{soundsDirectory}/mdc_eot"))[:-4])
                             else:
                                 print(f"MDC EOT mode: {flags.mdc}")
 
@@ -370,10 +396,12 @@ def processLoop():
                             if not flags.saveSpokenAudio:
                                 os.remove(f"{recordingDirectory}/tx-{filename}")
 
-                        # TODO: last unit was unreadable
+                        # if the length of the transcription is zero,
+                        # check to see if we got an audio file at all.
                         elif os.path.isfile(f"{recordingDirectory}/rx-{filename}"):
                             # rename the received audio to failed so we know. failed can't come after filename because filename contains .wav
                             os.rename(f"{recordingDirectory}/rx-{filename}", f"{recordingDirectory}/rx-failed-{filename}")
+                            # TODO: notify the unit they were unreadable.
                     else:
                         print(f"Sound stopped, discarding audio... Duration: {duration: .2f} seconds")
                     
@@ -381,7 +409,7 @@ def processLoop():
                 recording = False
                 frames = []
                 start_time = None
-                print("") # new line to prevent audio level from overwriting things
+                print("Resetting recording state") # new line to prevent audio level from overwriting things
 
 while True:
     try:
