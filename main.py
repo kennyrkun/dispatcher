@@ -143,13 +143,12 @@ def generateSpokenResponse(text, filename):
     )
 
 def ffplay(filename, args = ""):
-    return os.system(f"ffplay {args} \"{filename}\" -autoexit -nodisp")
+    return os.system(f"ffplay {args} \"{filename}\" -autoexit -nodisp -hide_banner -loglevel error")
 
-def playTone(freq = 1000, length = 5):
-    os.system(f"ffmpeg -f lavfi -i 'sine=frequency={freq}:duration={length}' tone.wav")
-    # TODO: use a generic audio player
-    ffplay("tone.wav")
-    os.remove("tone.wav")
+def playTone(freq = 300, lengthSeconds = 5):
+    print(f"Playing {freq}hz tone for {lengthSeconds} seconds")
+    # does not use ffplay function bc that calls a file
+    os.system(f"ffplay -f lavfi -i 'sine=frequency={freq}:duration={lengthSeconds}' -autoexit -nodisp -hide_banner")
 
 def processLoop():
     frames = []
