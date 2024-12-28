@@ -40,6 +40,7 @@ import datetime
 import os
 import pyaudio
 import requests
+import subprocess
 import sys
 import time
 import wave
@@ -257,8 +258,9 @@ def processLoop():
 
                             print(f"Response: {response}")
 
-                            if flags.delayTone is not None:
-                                playTone(1000, flags.delayTone)
+                            # if delayTone is 0, the program will hang.
+                            if flags.delayTone is not None and flags.delayTone > 0:
+                                playTone(lengthSeconds = flags.delayTone)
                             elif flags.delay is not None:
                                 time.sleep(flags.delay)
 
