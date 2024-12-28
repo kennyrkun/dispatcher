@@ -113,6 +113,8 @@ unavailablePhrases = [
 ]
 
 def promptResponse(string):
+    print("Prompting response...")
+
     request = requests.post("http://localhost:11434/api/generate", json = {
         "model": "llama3.2",
         "stream": False,
@@ -126,7 +128,19 @@ def promptResponse(string):
 def generateSpokenResponse(text, filename):
     global save_path
 
-    return os.system(f"gtts-cli \"{text}\" --lang en --output \"{save_path}/tx-{filename}\"")
+    print("Generating response audio...")
+
+    return subprocess.check_call(
+        [
+            "gtts-cli",
+            #"--debug",
+            #"--lang", "en",
+            "--output", f"{save_path}/tx-{filename}",
+            text
+        ],
+        stdout=sys.stdout,
+        stderr=subprocess.STDOUT
+    )
 
 def ffplay(filename, args = ""):
     return os.system(f"ffplay {args} \"{filename}\" -autoexit -nodisp")
