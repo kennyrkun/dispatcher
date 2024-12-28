@@ -4,4 +4,11 @@
 # Requirements
 - ffmpeg
 - ffplay
-- gtts-cli
+- openai whisper
+- gtts-cli (if not using piper)
+- piper-tts (if not using gtts)
+  - If using pip to install piper, follow these steps:
+    - install piper-phonemize-cross
+    - install piper-tts
+    - install onnxruntime
+  - voice data is required for piper. The program looks for voice data in `./voices/`

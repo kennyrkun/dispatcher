@@ -71,6 +71,29 @@ parser.add_argument("-threshold",
     help = "start recording once audio levels are above this value. when audio levels are below, the recording will be considered to be over."
 )
 
+parser.add_argument("-voiceEngine",
+    choices = [
+        "piper",
+        "gtts-remote"
+    ],
+    nargs = "?",
+    default = "piper",
+    const = "piper",
+    help = "which speech engine to use. piper is local and gtts is remote."
+)
+
+parser.add_argument("-voiceSpeed",
+    type = float,
+    default = 1.1,
+    help = "speed at which the spoken response should be played back"
+)
+
+parser.add_argument("-piperVoice",
+    type = str,
+    default = "en_US-libritts_r-medium",
+    help = "which voice model piper should use"
+)
+
 flags = parser.parse_args()
 
 print(flags.__dict__)
@@ -100,6 +123,7 @@ p = pyaudio.PyAudio()
 workingDirectory = os.path.join(os.path.expanduser('~'), 'Documents/GitHub/dispatcher')
 recordingDirectory = os.path.join(workingDirectory, "recordings")
 soundsDirectory = os.path.join(workingDirectory, "sounds")
+voicesDirectory = os.path.join(workingDirectory, "voices")
 
 lastUnit = ""
 
@@ -166,27 +190,35 @@ def generateSpokenResponse(text, filename):
 
     print("Generating response audio...")
 
-    subprocess.check_call(
-        [
-            "gtts-cli",
-            #"--debug",
-            #"--lang", "en",
-            "--output", filename,
-            text
-        ],
-        stdout=sys.stdout,
-        stderr=subprocess.STDOUT
-    )
+    if flags.voiceEngine == "gtts-remote":
+        subprocess.check_call(
+            [
+                "gtts-cli",
+                #"--debug",
+                #"--lang", "en",
+                "--output", filename,
+                text
+            ],
+            stdout=sys.stdout,
+            stderr=subprocess.STDOUT
+        )
 
-    # how much of the clip to cut off
-    cutTime = 0.33
+        # how much of the clip to cut off
+        cutTime = 0.33
 
-    # cuts off the last little bit of audio, because google leaves some hang time and i want the mdc tones to be right after speech is finished
-    os.system(f"ffmpeg -loglevel error -i {filename} -ss 0 -to $(echo $(ffprobe -i {filename} -show_entries format=duration -v quiet -of csv='p=0') - {cutTime} | bc) -c copy -f wav {filename}_new")
+        # cuts off the last little bit of audio, because google leaves some hang time and i want the mdc tones to be right after speech is finished
+        os.system(f"ffmpeg -loglevel error -i {filename} -ss 0 -to $(echo $(ffprobe -i {filename} -show_entries format=duration -v quiet -of csv='p=0') - {cutTime} | bc) -c copy -f wav {filename}_new")
 
-    os.remove(filename)
-    # give the new file the correct name
-    os.rename(f"{filename}_new", filename)
+        os.remove(filename)
+        # give the new file the correct name
+        os.rename(f"{filename}_new", filename)
+    else: # use piper
+        from piper.voice import PiperVoice
+
+        model = f"{voicesDirectory}/{flags.piperVoice}.onnx"
+        voice = PiperVoice.load(model)
+        wav_file = wave.open(filename, "w")
+        voice.synthesize(text, wav_file)
 
 def ffplay(filename, args = ""):
     print(f"Playing file {filename}...")
@@ -321,7 +353,7 @@ def processLoop():
                                 time.sleep(flags.delay)
 
                             # play the generated speech file
-                            ffplay(f"{recordingDirectory}/tx-{filename}", "-af 'atempo=1.3'")
+                            ffplay(f"{recordingDirectory}/tx-{filename}", f"-af 'atempo={flags.voiceSpeed}'")
 
                             if flags.mdc == "1200":
                                 ffplay(f"{soundsDirectory}/mdc_eot/MDC1200.wav")
