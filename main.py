@@ -150,6 +150,10 @@ def playTone(freq = 300, lengthSeconds = 5):
     # does not use ffplay function bc that calls a file
     os.system(f"ffplay -f lavfi -i 'sine=frequency={freq}:duration={lengthSeconds}' -autoexit -nodisp -hide_banner")
 
+def clearPreviousLine():
+    print("\033[A", end="\r")
+    print("\033[K", end="\r")
+
 def processLoop():
     frames = []
     recording = False
@@ -175,13 +179,13 @@ def processLoop():
         # TODO: find a way to replace rms because audioop is going away next python version
         level = audioop.rms(data, 2)
         
-        sys.stdout.write("\033[F") # up one line
+        clearPreviousLine()
         print(f"Audio level: {level}")
-        sys.stdout.write("\033[K") # clear to end of line
 
         # sound is loud enough to record, or the pad duration has not elapsed
         if level > THRESHOLD or last_detection_time + PAD_DURATION > current_time:
             if not recording:
+                clearPreviousLine()
                 print("Sound detected at level ", level, " starting recording...")
                 print("") # new line to prevent audio level from overwriting things
                 start_time = current_time  # Initialize the start time
@@ -194,6 +198,7 @@ def processLoop():
             
             # Check for max duration
             if start_time and current_time - start_time >= MAX_DURATION:
+                clearPreviousLine()
                 print("Max duration reached, terminating.")
                 recording = False
         
@@ -204,6 +209,7 @@ def processLoop():
 
                 if last_detection_time + PAD_DURATION < current_time:
                     if duration >= MIN_DURATION:
+                        clearPreviousLine()
                         print(f"Sound stopped with duration of {duration: .2f} seconds")
                         # Save the audio
                         filename = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.wav"
