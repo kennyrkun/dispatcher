@@ -171,10 +171,10 @@ def generateSpokenResponse(text, filename):
     )
 
     # how much of the clip to cut off
-    cutTime = 0.4
+    cutTime = 0.33
 
     # cuts off the last little bit of audio, because google leaves some hang time and i want the mdc tones to be right after speech is finished
-    os.system(f"ffmpeg -i {filename} -ss 0 -to $(echo $(ffprobe -i {filename} -show_entries format=duration -v quiet -of csv='p=0') - {cutTime} | bc) -c copy -f wav {filename}_new")
+    os.system(f"ffmpeg -loglevel error -i {filename} -ss 0 -to $(echo $(ffprobe -i {filename} -show_entries format=duration -v quiet -of csv='p=0') - {cutTime} | bc) -c copy -f wav {filename}_new")
 
     os.remove(filename)
     # give the new file the correct name
