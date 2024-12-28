@@ -6,8 +6,16 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument("-mdc",
-    action = "store_true",
-    help = "play an mdc squak after finished transmitting"
+    choices = [
+        "1200",
+        "1200-dos",
+        "1200-fdny",
+        "random"
+    ],
+    nargs = "?",
+    default = "1200",
+    const = "1200",
+    help = "simulate mdc tones"
 )
 
 parser.add_argument("-saveSpokenAudio",
@@ -40,6 +48,7 @@ import datetime
 import os
 import pyaudio
 import requests
+import random
 import subprocess
 import sys
 import time
@@ -65,6 +74,7 @@ MAX_DURATION = 30
 
 # Save file path
 save_path = os.path.join(os.path.expanduser('~'), 'Documents/GitHub/dispatcher')
+soundsDirectory = os.path.join(workingDirectory, "sounds")
 
 lastUnit = ""
 
@@ -270,8 +280,16 @@ def processLoop():
                             # play the generated speech file
                             ffplay(f"{save_path}/tx-{filename}", "-af 'atempo=1.3'")
 
-                            if flags.mdc:
-                                ffplay(f"{save_path}/MDC1200.wav")
+                            if flags.mdc == "1200":
+                                ffplay(f"{soundsDirectory}/mdc_eot/MDC1200.wav")
+                            elif flags.mdc == "1200-fdny":
+                                ffplay(f"{soundsDirectory}/mdc_eot/Saber1200.wav")
+                            elif flags.mdc == "1200-dos":
+                                ffplay(f"{soundsDirectory}/mdc_eot/MDC1200-DOS.wav")
+                            elif flags.mdc == "random":
+                                ffplay(f"{soundsDirectory}/mdc_eot/" + random.choice(os.listdir(f"{soundsDirectory}/mdc_eot")))
+                            else:
+                                print(f"MDC EOT mode: {flags.mdc}")
 
                             # delete the generated speech file
                             if not flags.saveSpokenAudio:

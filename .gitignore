@@ -1,2 +1,2 @@
-*.wav
 .DS_Store
+recordings/*.wav
