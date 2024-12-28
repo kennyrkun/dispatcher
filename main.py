@@ -85,7 +85,7 @@ parser.add_argument("-voiceVolume",
 
 parser.add_argument("-soundsVolume",
     type = float,
-    default = 0.5,
+    default = 0.08,
     help = "volume sounds other than the voice are played back at"
 )
 
@@ -249,6 +249,12 @@ def playSound(soundName):
     print(f"Playing file {soundName}...")
     return ffplay(f"{soundsDirectory}/{soundName}.wav", f"-af 'volume={flags.soundsVolume}'")
 
+def playRandomSoundInDirectory(directory):
+    playSound(f"{directory}/{random.choice(os.listdir(f"{soundsDirectory}/{directory}"))[:-4]}")
+
+def playError():
+    playRandomSoundInDirectory("error")
+
 def playNoise(lengthSeconds = 5):
     print(f"Playing noise for {lengthSeconds} seconds...")
     # does not use ffplay function bc that calls a file
@@ -269,14 +275,14 @@ def processLoop():
         channels=1,
         rate=44100,
         input=True,
-        frames_per_buffer=1024
+        frames_per_buffer=4096
     )
 
     print("Started stream, beginning processing...")
     print("") # new line to prevent audio level from overwriting things
 
     while True:
-        data = stream.read(1024)
+        data = stream.read(4096, exception_on_overflow=False)
 
         current_time = time.time()
         
@@ -388,7 +394,7 @@ def processLoop():
                                 playSound("mdc_eot/MDC1200-DOS")
                             elif flags.mdc == "random":
                                 # finds a random ifle in the mdc_eot directory and removes the last 4 chars from it (.wav)
-                                playSound("mdc_eot/" + random.choice(os.listdir(f"{soundsDirectory}/mdc_eot"))[:-4])
+                                playRandomSoundInDirectory("mdc_eot")
                             else:
                                 print(f"MDC EOT mode: {flags.mdc}")
 
@@ -401,22 +407,25 @@ def processLoop():
                         elif os.path.isfile(f"{recordingDirectory}/rx-{filename}"):
                             # rename the received audio to failed so we know. failed can't come after filename because filename contains .wav
                             os.rename(f"{recordingDirectory}/rx-{filename}", f"{recordingDirectory}/rx-failed-{filename}")
-                            # TODO: notify the unit they were unreadable.
+
+                            playError()
                     else:
                         print(f"Sound stopped, discarding audio... Duration: {duration: .2f} seconds")
                     
                 # Reset recording states
-                recording = False
                 frames = []
+                recording = False
                 start_time = None
+                last_detection_time = 0
                 print("Resetting recording state") # new line to prevent audio level from overwriting things
 
 while True:
     try:
         processLoop()
     except Exception as e:
-        print("An exception occurred:", e)
+        print(f"A {type(e).__name__} exception occurred:", e)
         print("The stream will be restarted.")
+        playError()
     except KeyboardInterrupt:
         print("KeyboardInterrupt quit")
         exit()
