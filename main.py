@@ -144,12 +144,13 @@ def generateSpokenResponse(text, filename):
     )
 
 def ffplay(filename, args = ""):
+    print(f"Playing file {filename}...")
     return os.system(f"ffplay {args} \"{filename}\" -autoexit -nodisp -hide_banner -loglevel error")
 
 def playTone(freq = 300, lengthSeconds = 5):
-    print(f"Playing {freq}hz tone for {lengthSeconds} seconds")
+    print(f"Playing {freq}hz tone for {lengthSeconds} seconds...")
     # does not use ffplay function bc that calls a file
-    os.system(f"ffplay -f lavfi -i 'sine=frequency={freq}:duration={lengthSeconds}' -autoexit -nodisp -hide_banner")
+    os.system(f"ffplay -f lavfi 'anoisesrc=a=0.1:c=white:d={lengthSeconds}' -autoexit -nodisp -hide_banner -loglevel error")
 
 def clearPreviousLine():
     print("\033[A", end="\r")
@@ -211,7 +212,7 @@ def processLoop():
                 if last_detection_time + PAD_DURATION < current_time:
                     if duration >= MIN_DURATION:
                         clearPreviousLine()
-                        print(f"Sound stopped with duration of {duration: .2f} seconds")
+                        print(f"Sound stopped at level {level} with duration of {duration: .2f} seconds")
                         # Save the audio
                         filename = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.wav"
                         wf = wave.open(f"{save_path}/rx-{filename}", 'wb')
