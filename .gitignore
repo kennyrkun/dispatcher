@@ -1,2 +1,3 @@
 .DS_Store
 recordings/*.wav
+recordings/transcript.log

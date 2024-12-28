@@ -18,14 +18,22 @@ parser.add_argument("-mdc",
     help = "simulate mdc tones"
 )
 
+parser.add_argument("-dontSaveTranscript",
+    action = "store_true",
+    default = False,
+    help = "don't save received/transmitted transcript in logfile"
+)
+
 parser.add_argument("-saveSpokenAudio",
     action = "store_true",
-    help = "do not delete audio files containing spoken responses"
+    default = False,
+    help = "save audio files containing spoken responses"
 )
 
 parser.add_argument("-saveReceivedAudio",
     action = "store_false",
-    help = "do not delete files containing received transmission audio"
+    default = True,
+    help = "save files containing received transmission audio"
 )
 
 parser.add_argument("-delayTone",
@@ -271,6 +279,10 @@ def processLoop():
 
                         print(f'transcription: \"{transcription}\"')
 
+                        if flags.dontSaveTranscript is not True:
+                            with open(f"{recordingDirectory}/transcript.log", "a") as transcript:
+                                transcript.write(f"RX: {transcription}\n")
+
                         if len(transcription) > 0:
                             #if transcription.endswith("control"):
                             #    lastUnit = transcription[0:transcription.find("control")]
@@ -295,6 +307,10 @@ def processLoop():
                             response = response.get("response")
 
                             print(f"Response: {response}")
+
+                            if flags.dontSaveTranscript is not True:
+                                with open(f"{recordingDirectory}/transcript.log", "a") as transcript:
+                                    transcript.write(f"TX: {response}")
 
                             generateSpokenResponse(response, f"{recordingDirectory}/tx-{filename}")
 
