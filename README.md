@@ -6,6 +6,7 @@
 - ffmpeg
 - ffplay
 - openai whisper
+- pyaudio
 - gtts-cli (if not using piper)
 - piper-tts (if not using gtts)
   - If using pip to install piper, follow these steps:

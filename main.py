@@ -112,6 +112,11 @@ parser.add_argument("-ollamaModel",
     help = "model that ollama should use"
 )
 
+parser.add_argument("-debug",
+    action = "store_false",
+    help = "print more debug information"
+)
+
 flags = parser.parse_args()
 
 print(flags.__dict__)
@@ -128,6 +133,12 @@ import time
 import wave
 import whisper
 
+# Save file path
+workingDirectory = os.path.join(os.path.expanduser('~'), 'Documents/GitHub/dispatcher')
+recordingDirectory = os.path.join(workingDirectory, "recordings")
+soundsDirectory = os.path.join(workingDirectory, "sounds")
+voicesDirectory = os.path.join(workingDirectory, "voices")
+
 # only so that whisper can download different models
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -137,11 +148,17 @@ whisperModel = whisper.load_model("base")
 # Initialize PyAudio
 p = pyaudio.PyAudio()
 
-# Save file path
-workingDirectory = os.path.join(os.path.expanduser('~'), 'Documents/GitHub/dispatcher')
-recordingDirectory = os.path.join(workingDirectory, "recordings")
-soundsDirectory = os.path.join(workingDirectory, "sounds")
-voicesDirectory = os.path.join(workingDirectory, "voices")
+if flags.voiceEngine == "piper":
+    from piper.voice import PiperVoice
+
+    model = f"{voicesDirectory}/{flags.piperVoice}.onnx"
+    voice = PiperVoice.load(model)
+
+    # in piper, 0.8 is faster and 1.3 is slower.
+    # this formula reverses the number so that
+    # speed is consistent between gtts and piper
+    # 1.3 -> 0.8 and 0.8 -> 1.3 etc
+    voice.config.length_scale = 1 - (flags.voiceSpeed - 1.0)
 
 lastUnit = ""
 
@@ -211,6 +228,8 @@ def endTransmit():
         print(f"MDC EOT mode: {flags.mdc}")
 
 def promptResponse(string):
+    startTime = time.time()
+
     print("Prompting response...")
 
     request = requests.post("http://localhost:11434/api/generate", json = {
@@ -220,18 +239,25 @@ def promptResponse(string):
         # TODO: use template for prompt
     })
 
-    print("Raw response content: ", request.content)
+    if flags.debug:
+        print("Raw response content: ", request.content)
+
+    print(f"Took {time.time() - startTime}")
 
     return request.json()
 
 def speakResponse(text):
     global recordingDirectory
 
+    startTime = time.time()
+
     print("Generating response audio...")
 
     text = text.replace("*", "")
 
     if flags.voiceEngine == "gtts-remote":
+        print("Requesting generated speech...")
+
         filename = f"{recordingDirectory}/tx-{getNewRecordingFilename()}"
 
         subprocess.check_call(
@@ -246,26 +272,15 @@ def speakResponse(text):
             stderr=subprocess.STDOUT
         )
 
-        # how much of the clip to cut off
-        cutTime = 0.33
-
-        # cuts off the last little bit of audio, because google leaves some hang time and i want the mdc tones to be right after speech is finished
-        os.system(f"ffmpeg -loglevel error -i {filename} -ss 0 -to $(echo $(ffprobe -i {filename} -show_entries format=duration -v quiet -of csv='p=0') - {cutTime} | bc) -c copy -f wav {filename}_new")
-        os.remove(filename)
-        os.rename(f"{filename}_new", filename)
-
         beginTransmit()
 
-        playVoice(filename)
+        ffplay(filename, f"-af 'volume={flags.voiceVolume}' -af 'atempo={flags.voiceSpeed}'")
 
         os.remove(filename)
 
         endTransmit()
     else: # use piper
-        from piper.voice import PiperVoice
-
-        model = f"{voicesDirectory}/{flags.piperVoice}.onnx"
-        voice = PiperVoice.load(model)
+        print("Generating speech...")
 
         program = subprocess.Popen(
             [
@@ -275,10 +290,12 @@ def speakResponse(text):
                 "-f", "s16le",
                 "-ar", str(voice.config.sample_rate),
                 "-nodisp",
+                "-infbuf",
                 "-autoexit",
                 "-af", f"volume={flags.voiceVolume}",
-                "-af", f"atempo={flags.voiceSpeed}",
-                "-"
+                # can't use atempo because it exits too early and cuts off the last phonem.
+                # instead, we use piper's length_scale to change voice speed.
+                "-i", "pipe:"
             ],
             stdout=sys.stdout,
             stderr=subprocess.STDOUT,
@@ -295,12 +312,11 @@ def speakResponse(text):
 
         endTransmit()
 
+    print(f"Took {time.time() - startTime}s")
+
 def ffplay(filename, args = ""):
     print(f"Playing file {filename}...")
     return os.system(f"ffplay {args} \"{filename}\" -autoexit -nodisp -hide_banner -loglevel error")
-
-def playVoice(filename):
-    return ffplay(filename, f"-af 'volume={flags.voiceVolume}' -af 'atempo={flags.voiceSpeed}'")
 
 def playSound(soundName):
     print(f"Playing file {soundName}...")
