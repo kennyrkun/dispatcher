@@ -326,7 +326,9 @@ def playRandomSoundInDirectory(directory):
     playSound(f"{directory}/{random.choice([f for f in os.listdir(f"{soundsDirectory}/{directory}") if not f.startswith('.')])[:-4]}")
 
 def playError():
+    beginTransmit()
     playRandomSoundInDirectory("error")
+    endTransmit()
 
 def playNoise(lengthSeconds = 5):
     print(f"Playing noise for {lengthSeconds} seconds...")
