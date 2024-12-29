@@ -122,7 +122,13 @@ parser.add_argument("-piperVoice",
 parser.add_argument("-ollamaModel",
     type = str,
     default = "gemma2:2b",
-    help = "model that ollama should use"
+    help = "name of the llm that ollama should use"
+)
+
+parser.add_argument("-prompt",
+    type = str,
+    default = "ResearchStation",
+    help = "url to prompt used by llm"
 )
 
 parser.add_argument("-debug",
@@ -151,6 +157,7 @@ workingDirectory = os.path.join(os.path.expanduser("~"), "Documents/GitHub/dispa
 recordingDirectory = os.path.join(workingDirectory, "recordings")
 soundsDirectory = os.path.join(workingDirectory, "sounds")
 voicesDirectory = os.path.join(workingDirectory, "voices")
+promptsDirectory = os.path.join(workingDirectory, "prompts")
 
 # only so that whisper can download different models
 import ssl
@@ -173,11 +180,14 @@ if flags.voiceEngine == "piper":
     # speed is consistent between gtts and piper
     # 1.3 -> 0.8 and 0.8 -> 1.3 etc
     voice.config.length_scale = 1 - (flags.voiceSpeed - 1.0)
-userMessageHistory = [
 
+    with open(f"{promptsDirectory}/{flags.prompt}.txt", "r") as promptFile:
+        prompt = promptFile.read()
+
+    userMessageHistory = [
     {
         "role": "system",
-        "content": "You are a researcher at a remote research facility. The facility is named Station Alpha. The facility is located in the arctic region of Karnaka. You are communicating via a radio, on frequency 462.550. You are full on supplies. Answer in first person, using phrases like \"me\" or \"I\". Do not narrate. Do not make sound effects."
+        "content": prompt
     }
 ]
 
