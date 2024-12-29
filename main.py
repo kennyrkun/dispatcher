@@ -190,6 +190,26 @@ unavailablePhrases = [
     "we're ten seven",
 ]
 
+def beginTransmit():
+    # if delayNoise is 0, the program will hang.
+    if flags.delayNoise is not None and flags.delayNoise > 0:
+        playNoise(lengthSeconds = flags.delayNoise)
+    elif flags.delay is not None:
+        time.sleep(flags.delay)
+
+def endTransmit():
+    if flags.mdc == "1200":
+        playSound("mdc_eot/MDC1200")
+    elif flags.mdc == "1200-fdny":
+        playSound("mdc_eot/Saber1200")
+    elif flags.mdc == "1200-dos":
+        playSound("mdc_eot/MDC1200-DOS")
+    elif flags.mdc == "random":
+        # finds a random ifle in the mdc_eot directory and removes the last 4 chars from it (.wav)
+        playRandomSoundInDirectory("mdc_eot")
+    else:
+        print(f"MDC EOT mode: {flags.mdc}")
+
 def promptResponse(string):
     print("Prompting response...")
 
@@ -421,27 +441,6 @@ def processLoop():
                                     transcript.write(f"TX: {response}")
 
                             generateSpokenResponse(response, f"{recordingDirectory}/tx-{filename}")
-
-                            # if delayNoise is 0, the program will hang.
-                            if flags.delayNoise is not None and flags.delayNoise > 0:
-                                playNoise(lengthSeconds = flags.delayNoise)
-                            elif flags.delay is not None:
-                                time.sleep(flags.delay)
-
-                            # play the generated speech file
-                            playVoice(f"{recordingDirectory}/tx-{filename}")
-
-                            if flags.mdc == "1200":
-                                playSound("mdc_eot/MDC1200")
-                            elif flags.mdc == "1200-fdny":
-                                playSound("mdc_eot/Saber1200")
-                            elif flags.mdc == "1200-dos":
-                                playSound("mdc_eot/MDC1200-DOS")
-                            elif flags.mdc == "random":
-                                # finds a random ifle in the mdc_eot directory and removes the last 4 chars from it (.wav)
-                                playRandomSoundInDirectory("mdc_eot")
-                            else:
-                                print(f"MDC EOT mode: {flags.mdc}")
 
                             # delete the generated speech file
                             if not flags.saveSpokenAudio:
