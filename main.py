@@ -5,17 +5,30 @@ parser = argparse.ArgumentParser(
     description = "Uses AI to transcribe messages from an audio input, then generate a response based on that message and play it to an output."
 )
 
-parser.add_argument("-mdc",
+parser.add_argument("-mdcStart",
     choices = [
-        "1200",
-        "1200-dos",
-        "1200-fdny",
+        "MDC1200",
+        "MDC1200-DOS",
+        "MDC1200-Saber",
         "random"
     ],
     nargs = "?",
-    default = "1200-fdny",
-    const = "1200-fdny",
-    help = "simulate mdc tones"
+    default = "MDC1200-DOS",
+    const = "MDC1200-DOS",
+    help = "simulate mdc tones at the beginning of the transmission"
+)
+
+parser.add_argument("-mdcEnd",
+    choices = [
+        "MDC1200",
+        "MDC1200-DOS",
+        "MDC1200-Saber",
+        "random"
+    ],
+    nargs = "?",
+    default = "MDC1200-Saber",
+    const = "MDC1200-Saber",
+    help = "simulate mdc tones at the end of the transmission"
 )
 
 parser.add_argument("-dontSaveTranscript",
@@ -160,8 +173,8 @@ if flags.voiceEngine == "piper":
     # speed is consistent between gtts and piper
     # 1.3 -> 0.8 and 0.8 -> 1.3 etc
     voice.config.length_scale = 1 - (flags.voiceSpeed - 1.0)
+userMessageHistory = [
 
-messageHistory = [
     {
         "role": "system",
         "content": "You are a researcher at a remote arctic research facility. The facility is named Station Alpha. Answer in the first person, using phrases like \"me\" or \"I\". Do not narrate. Do not make sound effects. Limit replies to 2 or 3 short sentences. "
@@ -248,33 +261,36 @@ def beginTransmit():
         playNoise(lengthSeconds = flags.delayNoise)
     elif flags.delay is not None:
         time.sleep(flags.delay)
+    
+    if flags.mdcStart is not None:
+        if flags.mdcStart == "random":
+            playRandomSoundInDirectory("mdc")
+        else:
+            playSound(f"mdc/{flags.mdcStart}")
 
 def endTransmit():
-    if flags.mdc == "1200":
-        playSound("mdc_eot/MDC1200")
-    elif flags.mdc == "1200-fdny":
-        playSound("mdc_eot/Saber1200")
-    elif flags.mdc == "1200-dos":
-        playSound("mdc_eot/MDC1200-DOS")
-    elif flags.mdc == "random":
-        # finds a random ifle in the mdc_eot directory and removes the last 4 chars from it (.wav)
-        playRandomSoundInDirectory("mdc_eot")
-    else:
-        print(f"MDC EOT mode: {flags.mdc}")
+    if flags.mdcEnd is not None:
+        if flags.mdcEnd == "random":
+            playRandomSoundInDirectory("mdc")
+        else:
+            playSound(f"mdc/{flags.mdcEnd}")
 
-def promptResponse(string):
+def promptResponse(string, messageHistoryToUse = None):
     startTime = time.time()
 
     print("Prompting response...")
 
-    messageHistory.append({
+    if messageHistoryToUse is None:
+        messageHistoryToUse = userMessageHistory
+
+    messageHistoryToUse.append({
         "role": "user",
         "content": string
     })
 
     request = requests.post("http://localhost:11434/api/chat", json = {
         "model": flags.ollamaModel,
-        "messages": messageHistory,
+        "messages": messageHistoryToUse,
         "stream": False,
     })
 
@@ -292,11 +308,16 @@ def promptResponse(string):
 
     response = response.get("message")["content"]
 
+    messageHistoryToUse.append({
+        "role": "assistant",
+        "content": response
+    })
+
     print(f"Response: {response}")
     return response
 
 def resetMessageHistory():
-    messageHistory[1:]
+    userMessageHistory[1:]
     print("Message history reset.")
 
 def speakResponse(text):
