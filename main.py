@@ -147,7 +147,7 @@ import wave
 import whisper
 
 # Save file path
-workingDirectory = os.path.join(os.path.expanduser('~'), 'Documents/GitHub/dispatcher')
+workingDirectory = os.path.join(os.path.expanduser("~"), "Documents/GitHub/dispatcher")
 recordingDirectory = os.path.join(workingDirectory, "recordings")
 soundsDirectory = os.path.join(workingDirectory, "sounds")
 voicesDirectory = os.path.join(workingDirectory, "voices")
@@ -398,7 +398,7 @@ def playSound(soundName):
 
 def playRandomSoundInDirectory(directory):
     # TODO: might also use os.path.isdir() ?
-    playSound(f"{directory}/{random.choice([f for f in os.listdir(f"{soundsDirectory}/{directory}") if not f.startswith('.')])[:-4]}")
+    playSound(f"{directory}/{random.choice([f for f in os.listdir(f"{soundsDirectory}/{directory}") if not f.startswith(".")])[:-4]}")
 
 def playError():
     beginTransmit()
@@ -415,7 +415,7 @@ def clearPreviousLine():
     print("\033[K", end="\r")
 
 def getNewRecordingFilename():
-    return f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.wav"
+    return f"{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.wav"
 
 def appendToTranscript(text):
     if flags.dontSaveTranscript is not True:
@@ -499,7 +499,7 @@ def processLoop():
 
                         # Save the audio
                         filename = getNewRecordingFilename()
-                        wf = wave.open(f"{recordingDirectory}/rx-{filename}", 'wb')
+                        wf = wave.open(f"{recordingDirectory}/rx-{filename}", "wb")
                         wf.setnchannels(1)
                         wf.setsampwidth(p.get_sample_size(pyaudio.paInt16))
                         wf.setframerate(44100)
@@ -515,9 +515,9 @@ def processLoop():
 
                         # fp16 is false because it generates a warning (at least on macos)
                         transcription = whisperModel.transcribe(f"{recordingDirectory}/rx-{filename}", fp16=False)
-                        transcription = transcription['text'].strip(" .,\n").lower()
+                        transcription = transcription["text"].strip(" .,\n").lower()
 
-                        print(f'Transcription: \"{transcription}\"')
+                        print(f"Transcription: \"{transcription}\"")
                         print(f"Took {round(time.time() - transcribeStartTime, 2)}s")
 
                         if not flags.saveReceivedAudio:
