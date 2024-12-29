@@ -24,12 +24,6 @@ parser.add_argument("-dontSaveTranscript",
     help = "don't save received/transmitted transcript in logfile"
 )
 
-parser.add_argument("-saveSpokenAudio",
-    action = "store_true",
-    default = False,
-    help = "save audio files containing spoken responses"
-)
-
 parser.add_argument("-saveReceivedAudio",
     action = "store_false",
     default = True,
@@ -239,6 +233,15 @@ def generateSpokenResponse(text, filename):
         os.remove(filename)
         # give the new file the correct name
         os.rename(f"{filename}_new", filename)
+
+        beginTransmit()
+
+        # play the generated speech file
+        playVoice(filename)
+
+        os.remove(filename)
+
+        endTransmit()
     else: # use piper
         from piper.voice import PiperVoice
 
@@ -247,7 +250,33 @@ def generateSpokenResponse(text, filename):
         wav_file = wave.open(filename, "w")
         voice.synthesize(text, wav_file)
 
-        # TODO: eventually, I would like to pipe the raw audio data into ffplay
+        program = subprocess.Popen(
+            [
+                "ffplay",
+                "-hide_banner",
+                "-loglevel", "error",
+                "-f", "s16le",
+                "-ar", str(voice.config.sample_rate),
+                "-nodisp",
+                "-autoexit",
+                "-af", f"volume={flags.voiceVolume}",
+                "-af", f"atempo={flags.voiceSpeed}",
+                "-"
+            ],
+            stdout=sys.stdout,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE
+        )
+
+        beginTransmit()
+
+        for audio_bytes in voice.synthesize_stream_raw(text):
+            program.stdin.write(audio_bytes)
+
+        program.stdin.close()
+        program.wait()
+
+        endTransmit()
 
 def ffplay(filename, args = ""):
     print(f"Playing file {filename}...")
@@ -274,6 +303,9 @@ def playNoise(lengthSeconds = 5):
 def clearPreviousLine():
     print("\033[A", end="\r")
     print("\033[K", end="\r")
+
+def getNewRecordingFilename():
+    return f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.wav"
 
 def processLoop():
     frames = []
