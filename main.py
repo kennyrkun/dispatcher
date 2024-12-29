@@ -160,6 +160,13 @@ if flags.voiceEngine == "piper":
     # 1.3 -> 0.8 and 0.8 -> 1.3 etc
     voice.config.length_scale = 1 - (flags.voiceSpeed - 1.0)
 
+messageHistory = [
+    {
+        "role": "system",
+        "content": "You are a researcher at a remote arctic research facility. The facility is named Station Alpha. Answer in the first person, using phrases like \"me\" or \"I\". Do not narrate. Do not make sound effects. Limit replies to 2 or 3 short sentences. "
+    }
+]
+
 lastUnit = ""
 
 availablePhrases = [
@@ -232,11 +239,15 @@ def promptResponse(string):
 
     print("Prompting response...")
 
-    request = requests.post("http://localhost:11434/api/generate", json = {
+    messageHistory.append({
+        "role": "user",
+        "content": string
+    })
+
+    request = requests.post("http://localhost:11434/api/chat", json = {
         "model": flags.ollamaModel,
+        "messages": messageHistory,
         "stream": False,
-        "prompt": string,
-        # TODO: use template for prompt
     })
 
     if flags.debug:
@@ -244,7 +255,17 @@ def promptResponse(string):
 
     print(f"Took {round(time.time() - startTime, 2)}s")
 
-    return request.json()
+    response = request.json()
+
+    if response.get("error") is not None:
+        raise Exception("Error response from model: " + response.get("error"))
+    elif response.get("message") is None:
+        raise Exception("Message from model was None.")
+
+    response = response.get("message")["content"]
+
+    print(f"Response: {response}")
+    return response
 
 def speakResponse(text):
     global recordingDirectory
@@ -452,15 +473,6 @@ def processLoop():
                             #    generateSpokenResponse(transcription, filename)
 
                             response = promptResponse(transcription)
-
-                            if response.get("error") is not None:
-                                raise Exception("Error response from model: " + response.get("error"))
-                            elif response.get("response") is None:
-                                raise Exception("Reponse from model was None.")
-                            
-                            response = response.get("response")
-
-                            print(f"Response: {response}")
 
                             if flags.dontSaveTranscript is not True:
                                 with open(f"{recordingDirectory}/transcript.log", "a") as transcript:
