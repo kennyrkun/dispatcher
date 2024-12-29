@@ -112,6 +112,12 @@ parser.add_argument("-piperVoice",
     help = "which voice model piper should use"
 )
 
+parser.add_argument("-ollamaModel",
+    type = str,
+    default = "gemma2",
+    help = "model that ollama should use"
+)
+
 flags = parser.parse_args()
 
 print(flags.__dict__)
@@ -194,7 +200,7 @@ def promptResponse(string):
     print("Prompting response...")
 
     request = requests.post("http://localhost:11434/api/generate", json = {
-        "model": "llama3.2",
+        "model": flags.ollamaModel,
         "stream": False,
         "prompt": string,
         # TODO: use template for prompt
@@ -208,6 +214,8 @@ def generateSpokenResponse(text, filename):
     global workingDirectory
 
     print("Generating response audio...")
+
+    text = text.replace("*", "")
 
     if flags.voiceEngine == "gtts-remote":
         subprocess.check_call(
