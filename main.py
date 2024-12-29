@@ -368,11 +368,12 @@ def processLoop():
         clearPreviousLine()
         print(f"Audio level: {level}")
 
-        # sound is loud enough to record, or the pad duration has not elapsed
+        # sound is loud enough to record,
+        # or the last detected sound was less than padDuration (eg 2 seconds) ago
         if level > flags.threshold or last_detection_time + flags.padDuration > current_time:
             if not recording:
                 clearPreviousLine()
-                print("Sound detected at level ", level, " starting recording...")
+                print(f"Sound detected at level {level} starting recording...")
                 print("") # new line to prevent audio level from overwriting things
                 start_time = current_time  # Initialize the start time
 
@@ -385,10 +386,10 @@ def processLoop():
             # Check for max duration
             if start_time and current_time - start_time >= flags.maxDuration:
                 clearPreviousLine()
-                print("Max duration reached, terminating.")
+                print("Max duration reached, stopping recording.")
                 recording = False
         
-        # sound is too quiet
+        # sound is too quiet, or last detection + padDuration was earlier than the current time
         else:
             if recording:
                 duration = current_time - start_time
