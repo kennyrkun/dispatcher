@@ -196,7 +196,8 @@ def promptResponse(string):
     request = requests.post("http://localhost:11434/api/generate", json = {
         "model": "llama3.2",
         "stream": False,
-        "prompt": string
+        "prompt": string,
+        # TODO: use template for prompt
     })
 
     print("Raw response content: ", request.content)
@@ -237,6 +238,8 @@ def generateSpokenResponse(text, filename):
         voice = PiperVoice.load(model)
         wav_file = wave.open(filename, "w")
         voice.synthesize(text, wav_file)
+
+        # TODO: eventually, I would like to pipe the raw audio data into ffplay
 
 def ffplay(filename, args = ""):
     print(f"Playing file {filename}...")
@@ -332,6 +335,8 @@ def processLoop():
 
                         if not os.path.isfile(f"{recordingDirectory}/rx-{filename}"):
                             raise Exception("File for received audio did not exist to transcribe.")
+                        
+                        print("Transcribing audio...")
                 
                         # fp16 is false because it generates a warning (at least on macos)
                         transcription = whisperModel.transcribe(f"{recordingDirectory}/rx-{filename}", fp16=False)
