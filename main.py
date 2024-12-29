@@ -108,7 +108,7 @@ parser.add_argument("-piperVoice",
 
 parser.add_argument("-ollamaModel",
     type = str,
-    default = "gemma2",
+    default = "gemma2:2b",
     help = "model that ollama should use"
 )
 
