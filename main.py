@@ -147,6 +147,7 @@ whisperModel = whisper.load_model("base")
 
 # Initialize PyAudio
 p = pyaudio.PyAudio()
+MIC_STREAM_CHUNK_SIZE = 1024
 
 if flags.voiceEngine == "piper":
     from piper.voice import PiperVoice
@@ -365,13 +366,19 @@ def getNewRecordingFilename():
     return f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.wav"
 
 def openMicrophoneStream():
-    return p.open(
-        format=pyaudio.paInt16,
-        channels=1,
-        rate=44100,
-        input=True,
-        frames_per_buffer=4096
+    stream = p.open(
+        format = pyaudio.paInt16,
+        channels = 1,
+        rate = 44100,
+        input = True,
+        frames_per_buffer = MIC_STREAM_CHUNK_SIZE
     )
+
+    # throw away the first chunk of data to avoid
+    # recording being started immediately
+    stream.read(MIC_STREAM_CHUNK_SIZE, exception_on_overflow=False)
+
+    return stream
 
 def processLoop():
     frames = []
@@ -385,11 +392,10 @@ def processLoop():
     print("") # new line to prevent audio level from overwriting things
 
     while True:
-        data = micStream.read(4096, exception_on_overflow=False)
+        data = micStream.read(MIC_STREAM_CHUNK_SIZE, exception_on_overflow=False)
 
         current_time = time.time()
         
-        # TODO: find a way to replace rms because audioop is going away next python version
         level = audioop.rms(data, 2)
         
         clearPreviousLine()
