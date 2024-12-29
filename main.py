@@ -323,6 +323,7 @@ def playSound(soundName):
     return ffplay(f"{soundsDirectory}/{soundName}.wav", f"-af 'volume={flags.soundsVolume}'")
 
 def playRandomSoundInDirectory(directory):
+    # TODO: might also use os.path.isdir() ?
     playSound(f"{directory}/{random.choice([f for f in os.listdir(f"{soundsDirectory}/{directory}") if not f.startswith('.')])[:-4]}")
 
 def playError():
@@ -342,13 +343,8 @@ def clearPreviousLine():
 def getNewRecordingFilename():
     return f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.wav"
 
-def processLoop():
-    frames = []
-    recording = False
-    start_time = None
-    last_detection_time = 0
-    
-    stream = p.open(
+def openMicrophoneStream():
+    return p.open(
         format=pyaudio.paInt16,
         channels=1,
         rate=44100,
@@ -356,11 +352,19 @@ def processLoop():
         frames_per_buffer=4096
     )
 
+def processLoop():
+    frames = []
+    recording = False
+    start_time = None
+    last_detection_time = 0
+    
+    micStream = openMicrophoneStream()
+
     print("Started stream, beginning processing...")
     print("") # new line to prevent audio level from overwriting things
 
     while True:
-        data = stream.read(4096, exception_on_overflow=False)
+        data = micStream.read(4096, exception_on_overflow=False)
 
         current_time = time.time()
         
@@ -400,6 +404,9 @@ def processLoop():
                     if duration >= flags.minDuration:
                         clearPreviousLine()
                         print(f"Sound stopped at level {level} with duration of {duration: .2f} seconds")
+
+                        micStream.close()
+
                         # Save the audio
                         filename = getNewRecordingFilename()
                         wf = wave.open(f"{recordingDirectory}/rx-{filename}", 'wb')
@@ -470,12 +477,13 @@ def processLoop():
                             playError()
                     else:
                         print(f"Sound stopped, discarding audio... Duration: {duration: .2f} seconds")
-                    
+                
                 # Reset recording states
                 frames = []
                 recording = False
                 start_time = None
                 last_detection_time = 0
+                micStream = openMicrophoneStream()
                 print("Resetting recording state") # new line to prevent audio level from overwriting things
 
 while True:
