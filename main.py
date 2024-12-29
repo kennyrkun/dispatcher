@@ -381,6 +381,8 @@ def openMicrophoneStream():
     return stream
 
 def processLoop():
+    print("Beginning process loop")
+
     frames = []
     recording = False
     start_time = None
