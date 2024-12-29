@@ -323,7 +323,7 @@ def playSound(soundName):
     return ffplay(f"{soundsDirectory}/{soundName}.wav", f"-af 'volume={flags.soundsVolume}'")
 
 def playRandomSoundInDirectory(directory):
-    playSound(f"{directory}/{random.choice(os.listdir(f"{soundsDirectory}/{directory}"))[:-4]}")
+    playSound(f"{directory}/{random.choice([f for f in os.listdir(f"{soundsDirectory}/{directory}") if not f.startswith('.')])[:-4]}")
 
 def playError():
     playRandomSoundInDirectory("error")
