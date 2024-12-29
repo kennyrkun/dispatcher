@@ -113,7 +113,7 @@ parser.add_argument("-ollamaModel",
 )
 
 parser.add_argument("-debug",
-    action = "store_false",
+    action = "store_true",
     help = "print more debug information"
 )
 
