@@ -242,7 +242,7 @@ def promptResponse(string):
     if flags.debug:
         print("Raw response content: ", request.content)
 
-    print(f"Took {time.time() - startTime}")
+    print(f"Took {round(time.time() - startTime, 2)}s")
 
     return request.json()
 
@@ -312,7 +312,7 @@ def speakResponse(text):
 
         endTransmit()
 
-    print(f"Took {time.time() - startTime}s")
+    print(f"Took {round(time.time() - startTime, 2)}s")
 
 def ffplay(filename, args = ""):
     print(f"Playing file {filename}...")
@@ -411,14 +411,17 @@ def processLoop():
                         
                         print("Transcribing audio...")
                 
+                        transcribeStartTime = time.time()
+
                         # fp16 is false because it generates a warning (at least on macos)
                         transcription = whisperModel.transcribe(f"{recordingDirectory}/rx-{filename}", fp16=False)
                         transcription = transcription['text'].strip(" .,\n").lower()
 
+                        print(f'Transcription: \"{transcription}\"')
+                        print(f"Took {round(time.time() - transcribeStartTime, 2)}s")
+
                         if not flags.saveReceivedAudio:
                             os.remove(f"{recordingDirectory}/rx-{filename}")
-
-                        print(f'transcription: \"{transcription}\"')
 
                         if flags.dontSaveTranscript is not True:
                             with open(f"{recordingDirectory}/transcript.log", "a") as transcript:
