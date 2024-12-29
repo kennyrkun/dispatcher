@@ -469,18 +469,20 @@ def processLoop():
                                 transcript.write(f"RX: {transcription}\n")
 
                         if len(transcription) > 0:
-                            #if transcription.endswith("control"):
-                            #    lastUnit = transcription[0:transcription.find("control")]
-                            #    generateSpokenResponse("control, go ahead", filename)
-                            #elif (len(lastUnit) > 0):
-                            #    if transcription in availablePhrases:
-                            #        generateSpokenResponse("control is clear {$lastUnit}, you're in service", filename)
-                            #    elif transcription in availablePhrases:
-                            #        generateSpokenResponse("control is clear {$lastUnit}, you're out of service", filename)
-                            #    else: # repeat back what they said
-                            #        generateSpokenResponse(lastUnit + " unable to copy", filename)
-                            #else: # repeat back what they said
-                            #    generateSpokenResponse(transcription, filename)
+                            if transcript == "innoculate, shield, pacify":
+                                messageHistory[1:]
+                            elif transcription.endswith("control"):
+                                lastUnit = transcription[0:transcription.find("control")]
+                                response = "control, go ahead"
+                            elif (len(lastUnit) > 0):
+                                if transcription in availablePhrases:
+                                    response = f"control is clear {lastUnit}, you're in service";
+                                elif transcription in availablePhrases:
+                                    response = f"control is clear {lastUnit}, you're out of service";
+                                else: # repeat back what they said
+                                    response = lastUnit + " unable to copy"
+                            else: # repeat back what they said
+                                response = promptResponse(transcription)
 
                             response = promptResponse(transcription)
 
