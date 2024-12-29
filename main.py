@@ -168,48 +168,75 @@ messageHistory = [
     }
 ]
 
-lastUnit = ""
+lastUnit = None
 
 availablePhrases = [
+    "i'm 10-8",
+    "i'm 10.8",
+    "i'm 108",
+    "i'm ten eight"
+    "i'm available",
+    "i'm tonight",
+    "i'm available",
+    "i'm in service",
+
     "show me 10-8",
+    "show me 10.8",
     "show me 108",
+    "show me ten eight"
     "show me available",
     "show me tonight",
     "show me available",
     "show me in service",
 
     "show us 10-8",
+    "show us 10.8",
     "show us 108",
+    "show us ten eight",
     "show us available",
     "show us tonight",
     "show us available",
     "show us in service",
-    "show us ten eight",
 
     "we're 10-8",
+    "we're 10.8",
     "we're 108",
+    "we're ten eight",
     "we're available",
     "we're tonight",
     "we're available",
     "we're in service",
-    "we're ten eight",
 ]
 
 unavailablePhrases = [
+    "i'm 10-7",
+    "i'm 10.7",
+    "i'm 107",
+    "i'm ten seven",
+    "i'm unavailable",
+    "i'm out of service",
+    "i'm ten seven",
+
     "show me 10-7",
+    "show me 10.7",
     "show me 107",
+    "show me ten seven",
     "show me unavailable",
     "show me out of service",
     "show me ten seven",
 
     "show us 10-7",
+    "show us 10.7",
     "show us 107",
+    "show us ten seven",
     "show us unavailable",
     "show us out of service",
     "show us ten seven",
 
     "we're 10-7",
+    "we're 10.7",
     "we're 107",
+    "we're ten seven",
     "we're unavailable",
     "we're out of service",
     "we're ten seven",
@@ -267,6 +294,10 @@ def promptResponse(string):
 
     print(f"Response: {response}")
     return response
+
+def resetMessageHistory():
+    messageHistory[1:]
+    print("Message history reset.")
 
 def speakResponse(text):
     global recordingDirectory
@@ -365,6 +396,11 @@ def clearPreviousLine():
 def getNewRecordingFilename():
     return f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.wav"
 
+def appendToTranscript(text):
+    if flags.dontSaveTranscript is not True:
+        with open(f"{recordingDirectory}/transcript.log", "a") as transcriptFile:
+            transcriptFile.write(f"RX: {text}\n")
+
 def openMicrophoneStream():
     stream = p.open(
         format = pyaudio.paInt16,
@@ -381,6 +417,8 @@ def openMicrophoneStream():
     return stream
 
 def processLoop():
+    global lastUnit
+
     print("Beginning process loop")
 
     frames = []
@@ -464,31 +502,32 @@ def processLoop():
                         if not flags.saveReceivedAudio:
                             os.remove(f"{recordingDirectory}/rx-{filename}")
 
-                        if flags.dontSaveTranscript is not True:
-                            with open(f"{recordingDirectory}/transcript.log", "a") as transcript:
-                                transcript.write(f"RX: {transcription}\n")
+                        appendToTranscript(f"RX: {transcription}")
 
                         if len(transcription) > 0:
-                            if transcript == "innoculate, shield, pacify":
-                                messageHistory[1:]
+                            if transcription == "innoculate shield pacify":
+                                resetMessageHistory()
+                                response = "Innoculation complete."
+                            # acquires the unit who is speaking, for use later
                             elif transcription.endswith("control"):
                                 lastUnit = transcription[0:transcription.find("control")]
-                                response = "control, go ahead"
-                            elif (len(lastUnit) > 0):
-                                if transcription in availablePhrases:
-                                    response = f"control is clear {lastUnit}, you're in service";
-                                elif transcription in availablePhrases:
-                                    response = f"control is clear {lastUnit}, you're out of service";
+                                resetMessageHistory()
+                                response = "control, goahead"
+                            # if we're in a conversation with a specific unit
+                            elif lastUnit is not None:
+                                if availablePhrases.count(transcription):
+                                    response = f"control is clear {lastUnit}, you're in service"
+                                elif unavailablePhrases.count(transcription):
+                                    response = f"control is clear {lastUnit}, you're out of service"
+                                elif transcription.endswith("clear"):
+                                    lastUnit = None
+                                    continue # TODO: this causes an exception to be thrown, but that's okay because it sounds cool.
                                 else: # repeat back what they said
                                     response = lastUnit + " unable to copy"
                             else: # repeat back what they said
                                 response = promptResponse(transcription)
 
-                            response = promptResponse(transcription)
-
-                            if flags.dontSaveTranscript is not True:
-                                with open(f"{recordingDirectory}/transcript.log", "a") as transcript:
-                                    transcript.write(f"TX: {response}")
+                            appendToTranscript(f"TX: {response}")
 
                             speakResponse(response)
 
