@@ -68,7 +68,7 @@ parser.add_argument("-minDuration",
 
 parser.add_argument("-padDuration",
     type = float,
-    default = 2.5,
+    default = 2,
     help = "how long in seconds to keep listening before a received transmission is considered to be over"
 )
 
@@ -80,7 +80,7 @@ parser.add_argument("-maxDuration",
 
 parser.add_argument("-threshold",
     type = int,
-    default = 800,
+    default = 1000,
     help = "start recording once audio levels are above this value. when audio levels are below, the recording will be considered to be over."
 )
 
