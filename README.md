@@ -2,6 +2,7 @@
 - Radio sounds are from http://www.w2sjw.com/.
 
 # Requirements
+- ollama and llama3.2
 - ffmpeg
 - ffplay
 - openai whisper
