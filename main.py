@@ -224,14 +224,16 @@ def promptResponse(string):
 
     return request.json()
 
-def generateSpokenResponse(text, filename):
-    global workingDirectory
+def speakResponse(text):
+    global recordingDirectory
 
     print("Generating response audio...")
 
     text = text.replace("*", "")
 
     if flags.voiceEngine == "gtts-remote":
+        filename = f"{recordingDirectory}/tx-{getNewRecordingFilename()}"
+
         subprocess.check_call(
             [
                 "gtts-cli",
@@ -249,14 +251,11 @@ def generateSpokenResponse(text, filename):
 
         # cuts off the last little bit of audio, because google leaves some hang time and i want the mdc tones to be right after speech is finished
         os.system(f"ffmpeg -loglevel error -i {filename} -ss 0 -to $(echo $(ffprobe -i {filename} -show_entries format=duration -v quiet -of csv='p=0') - {cutTime} | bc) -c copy -f wav {filename}_new")
-
         os.remove(filename)
-        # give the new file the correct name
         os.rename(f"{filename}_new", filename)
 
         beginTransmit()
 
-        # play the generated speech file
         playVoice(filename)
 
         os.remove(filename)
@@ -267,8 +266,6 @@ def generateSpokenResponse(text, filename):
 
         model = f"{voicesDirectory}/{flags.piperVoice}.onnx"
         voice = PiperVoice.load(model)
-        wav_file = wave.open(filename, "w")
-        voice.synthesize(text, wav_file)
 
         program = subprocess.Popen(
             [
@@ -290,8 +287,8 @@ def generateSpokenResponse(text, filename):
 
         beginTransmit()
 
-        for audio_bytes in voice.synthesize_stream_raw(text):
-            program.stdin.write(audio_bytes)
+        for byteData in voice.synthesize_stream_raw(text):
+            program.stdin.write(byteData)
 
         program.stdin.close()
         program.wait()
@@ -385,7 +382,7 @@ def processLoop():
                         clearPreviousLine()
                         print(f"Sound stopped at level {level} with duration of {duration: .2f} seconds")
                         # Save the audio
-                        filename = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.wav"
+                        filename = getNewRecordingFilename()
                         wf = wave.open(f"{recordingDirectory}/rx-{filename}", 'wb')
                         wf.setnchannels(1)
                         wf.setsampwidth(p.get_sample_size(pyaudio.paInt16))
@@ -440,11 +437,7 @@ def processLoop():
                                 with open(f"{recordingDirectory}/transcript.log", "a") as transcript:
                                     transcript.write(f"TX: {response}")
 
-                            generateSpokenResponse(response, f"{recordingDirectory}/tx-{filename}")
-
-                            # delete the generated speech file
-                            if not flags.saveSpokenAudio:
-                                os.remove(f"{recordingDirectory}/tx-{filename}")
+                            speakResponse(response)
 
                         # if the length of the transcription is zero,
                         # check to see if we got an audio file at all.
