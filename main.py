@@ -429,6 +429,8 @@ def processLoop():
 
                 if last_detection_time + flags.padDuration < current_time:
                     if duration >= flags.minDuration:
+                        totalProcessStart = time.time()
+
                         clearPreviousLine()
                         print(f"Sound stopped at level {level} with duration of {duration: .2f} seconds")
 
@@ -493,6 +495,8 @@ def processLoop():
                             os.rename(f"{recordingDirectory}/rx-{filename}", f"{recordingDirectory}/rx-failed-{filename}")
 
                             playError()
+
+                        print(f"Total processing time: {round(time.time() - totalProcessStart, 2)}s")
                     else:
                         print(f"Sound stopped, discarding audio... Duration: {duration: .2f} seconds")
                 
