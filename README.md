@@ -7,8 +7,7 @@
 - ffplay
 - openai whisper
 - pyaudio
-- gtts-cli (if not using piper)
-- piper-tts (if not using gtts)
+- piper-tts
   - If using pip to install piper, follow these steps:
     - install piper-phonemize-cross
     - install piper-tts

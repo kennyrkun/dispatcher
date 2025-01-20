@@ -2,3 +2,4 @@
 recordings/*.wav
 recordings/transcript.log
 voices/
+*.pyc

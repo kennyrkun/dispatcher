@@ -96,17 +96,6 @@ parser.add_argument("-soundsVolume",
     help = "volume sounds other than the voice are played back at"
 )
 
-parser.add_argument("-voiceEngine",
-    choices = [
-        "piper",
-        "gtts-remote"
-    ],
-    nargs = "?",
-    default = "piper",
-    const = "piper",
-    help = "which speech engine to use. piper is local and gtts is remote."
-)
-
 parser.add_argument("-voiceSpeed",
     type = float,
     default = 1.1,
@@ -123,6 +112,12 @@ parser.add_argument("-ollamaModel",
     type = str,
     default = "gemma2:2b",
     help = "name of the llm that ollama should use"
+)
+
+parser.add_argument("-ollamaUri",
+    type = str,
+    default = "http://localhost:11434",
+    help = "uri to ollama server. do not include trailing slash."
 )
 
 parser.add_argument("-prompt",
@@ -143,6 +138,7 @@ print(flags.__dict__)
 import audioop
 import datetime
 import os
+from piper.voice import PiperVoice
 import pyaudio
 import requests
 import random
@@ -169,33 +165,31 @@ whisperModel = whisper.load_model("base")
 p = pyaudio.PyAudio()
 MIC_STREAM_CHUNK_SIZE = 1024
 
-if flags.voiceEngine == "piper":
-    from piper.voice import PiperVoice
+if flags.piperVoice == "random":
+    model = f"{voicesDirectory}/{random.choice([f for f in os.listdir(f"{voicesDirectory}/") if not f.startswith(".") and not f.endswith(".json")])[:-5]}"
+else:
+    model = f"{voicesDirectory}/{flags.piperVoice}"
 
-    if flags.piperVoice == "random":
-        model = f"{voicesDirectory}/{random.choice([f for f in os.listdir(f"{voicesDirectory}/") if not f.startswith(".") and not f.endswith(".json")])[:-5]}"
-    else:
-        model = f"{voicesDirectory}/{flags.piperVoice}"
+print(f"Chose model {model} for piper voice.")
 
-    print(f"Chose model {model} for piper voice.")
+voice = PiperVoice.load(f"{model}.onnx")
 
-    voice = PiperVoice.load(f"{model}.onnx")
+# in piper, 0.8 is faster and 1.3 is slower.
+# naturally, bigger number should be faster so we reverse it.
+# 1.3 -> 0.8 and 0.8 -> 1.3 etc
+voice.config.length_scale = 1 - (flags.voiceSpeed - 1.0)
 
-    # in piper, 0.8 is faster and 1.3 is slower.
-    # this formula reverses the number so that
-    # speed is consistent between gtts and piper
-    # 1.3 -> 0.8 and 0.8 -> 1.3 etc
-    voice.config.length_scale = 1 - (flags.voiceSpeed - 1.0)
+with open(f"{promptsDirectory}/{flags.prompt}.txt", "r") as promptFile:
+    prompt = promptFile.read()
 
-    with open(f"{promptsDirectory}/{flags.prompt}.txt", "r") as promptFile:
-        prompt = promptFile.read()
-
-    userMessageHistory = [
+userMessageHistory = [
     {
         "role": "system",
         "content": prompt
     }
 ]
+
+#import bots
 
 lastUnit = None
 
@@ -304,7 +298,7 @@ def promptResponse(string, messageHistoryToUse = None):
         "content": string
     })
 
-    request = requests.post("http://localhost:11434/api/chat", json = {
+    request = requests.post(f"{flags.ollamaUri}/api/chat", json = {
         "model": flags.ollamaModel,
         "messages": messageHistoryToUse,
         "stream": False,
@@ -313,7 +307,7 @@ def promptResponse(string, messageHistoryToUse = None):
     if flags.debug:
         print("Raw response content: ", request.content)
 
-    print(f"Took {round(time.time() - startTime, 2)}s")
+    print(f"Reponse took {round(time.time() - startTime, 2)}s to generate.")
 
     response = request.json()
 
@@ -345,62 +339,37 @@ def speakResponse(text):
 
     text = text.replace("*", "")
 
-    if flags.voiceEngine == "gtts-remote":
-        print("Requesting generated speech...")
+    print("Generating speech...")
 
-        filename = f"{recordingDirectory}/tx-{getNewRecordingFilename()}"
+    program = subprocess.Popen(
+        [
+            "ffplay",
+            "-hide_banner",
+            "-loglevel", "error",
+            "-f", "s16le",
+            "-ar", str(voice.config.sample_rate),
+            "-nodisp",
+            "-infbuf",
+            "-autoexit",
+            "-af", f"volume={flags.voiceVolume}",
+            # can't use atempo because it exits too early and cuts off the last phonem.
+            # instead, we use piper's length_scale to change voice speed.
+            "-i", "pipe:"
+        ],
+        stdout=sys.stdout,
+        stderr=subprocess.STDOUT,
+        stdin=subprocess.PIPE
+    )
 
-        subprocess.check_call(
-            [
-                "gtts-cli",
-                #"--debug",
-                #"--lang", "en",
-                "--output", filename,
-                text
-            ],
-            stdout=sys.stdout,
-            stderr=subprocess.STDOUT
-        )
+    beginTransmit()
 
-        beginTransmit()
+    for byteData in voice.synthesize_stream_raw(text):
+        program.stdin.write(byteData)
 
-        ffplay(filename, f"-af 'volume={flags.voiceVolume}' -af 'atempo={flags.voiceSpeed}'")
+    program.stdin.close()
+    program.wait()
 
-        os.remove(filename)
-
-        endTransmit()
-    else: # use piper
-        print("Generating speech...")
-
-        program = subprocess.Popen(
-            [
-                "ffplay",
-                "-hide_banner",
-                "-loglevel", "error",
-                "-f", "s16le",
-                "-ar", str(voice.config.sample_rate),
-                "-nodisp",
-                "-infbuf",
-                "-autoexit",
-                "-af", f"volume={flags.voiceVolume}",
-                # can't use atempo because it exits too early and cuts off the last phonem.
-                # instead, we use piper's length_scale to change voice speed.
-                "-i", "pipe:"
-            ],
-            stdout=sys.stdout,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.PIPE
-        )
-
-        beginTransmit()
-
-        for byteData in voice.synthesize_stream_raw(text):
-            program.stdin.write(byteData)
-
-        program.stdin.close()
-        program.wait()
-
-        endTransmit()
+    endTransmit()
 
     print(f"Took {round(time.time() - startTime, 2)}s")
 
@@ -596,5 +565,5 @@ while True:
         print("The stream will be restarted.")
         playError()
     except KeyboardInterrupt:
-        print("KeyboardInterrupt quit")
-        exit()
+       print("KeyboardInterrupt quit")
+       exit()
