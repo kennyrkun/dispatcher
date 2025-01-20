@@ -80,7 +80,7 @@ parser.add_argument("-maxDuration",
 
 parser.add_argument("-threshold",
     type = int,
-    default = 1000,
+    default = 500,
     help = "start recording once audio levels are above this value. when audio levels are below, the recording will be considered to be over."
 )
 
@@ -142,6 +142,12 @@ parser.add_argument("-idleIntervalMin",
     type = int,
     default = 5,
     help = "minimum time between idle messages"
+)
+
+parser.add_argument("-initialStreamChunkDiscardCount",
+    type = int,
+    default = 2,
+    help = "number of chunks to discard from the microphone stream after it has been initialised. helps to prevent recording from being triggered immediately after the stream is opened."
 )
 
 parser.add_argument("-debug",
@@ -462,7 +468,8 @@ def openMicrophoneStream():
 
     # throw away the first chunk of data to avoid
     # recording being started immediately
-    micStream.read(MIC_STREAM_CHUNK_SIZE, exception_on_overflow=False)
+    for x in range(0, flags.initialStreamChunkDiscardCount):
+        micStream.read(MIC_STREAM_CHUNK_SIZE, exception_on_overflow=False)
 
 def closeMicStream():
     global micStream
