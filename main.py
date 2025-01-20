@@ -45,7 +45,7 @@ parser.add_argument("-saveReceivedAudio",
 
 parser.add_argument("-delayNoise",
     type = float,
-    default = 0.3,
+    default = 0.4,
     help = "plays noise for x seconds to help a radio open vox"
 )
 
@@ -86,19 +86,19 @@ parser.add_argument("-threshold",
 
 parser.add_argument("-voiceVolume",
     type = float,
-    default = 1,
+    default = 0.5,
     help = "volume the voice is played back at"
 )
 
 parser.add_argument("-soundsVolume",
     type = float,
-    default = 0.08,
+    default = 1,
     help = "volume sounds other than the voice are played back at"
 )
 
 parser.add_argument("-voiceSpeed",
     type = float,
-    default = 1.1,
+    default = 1.2,
     help = "speed at which the spoken response should be played back"
 )
 
@@ -126,6 +126,24 @@ parser.add_argument("-prompt",
     help = "url to prompt used by llm"
 )
 
+parser.add_argument("-idleDelay",
+    type = int,
+    default = 120,
+    help = "how long to wait before beginning idle chat using the llm. -1 disables idle messages"
+)
+
+parser.add_argument("-idleIntervalMax",
+    type = int,
+    default = 60,
+    help = "max time before next idle message"
+)
+
+parser.add_argument("-idleIntervalMin",
+    type = int,
+    default = 5,
+    help = "minimum time between idle messages"
+)
+
 parser.add_argument("-debug",
     action = "store_true",
     help = "print more debug information"
@@ -148,7 +166,6 @@ import time
 import wave
 import whisper
 
-# Save file path
 workingDirectory = os.path.join(os.path.expanduser("~"), "Documents/GitHub/dispatcher")
 recordingDirectory = os.path.join(workingDirectory, "recordings")
 soundsDirectory = os.path.join(workingDirectory, "sounds")
@@ -161,23 +178,31 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 whisperModel = whisper.load_model("base")
 
-# Initialize PyAudio
 p = pyaudio.PyAudio()
 MIC_STREAM_CHUNK_SIZE = 1024
 
+def loadRandomPiperVoice():
+    return loadPiperVoice(random.choice([f for f in os.listdir(f"{voicesDirectory}/") if not f.startswith(".") and not f.endswith(".json")]))
+
+def loadPiperVoice(voice):
+    print(f"Loading voice: {voice}")
+
+    voice = PiperVoice.load(f"{voicesDirectory}/{voice}")
+
+    # in piper, 0.8 is faster and 1.3 is slower.
+    # this formula reverses the number so that
+    # speed is consistent between gtts and piper
+    # 1.3 -> 0.8 and 0.8 -> 1.3 etc
+    voice.config.length_scale = 1 - (flags.voiceSpeed - 1.0)
+
+    return voice
+
 if flags.piperVoice == "random":
-    model = f"{voicesDirectory}/{random.choice([f for f in os.listdir(f"{voicesDirectory}/") if not f.startswith(".") and not f.endswith(".json")])[:-5]}"
+    dispatcherVoice = loadRandomPiperVoice()
 else:
-    model = f"{voicesDirectory}/{flags.piperVoice}"
+    dispatcherVoice = loadPiperVoice(f"{flags.piperVoice}.onnx")
 
-print(f"Chose model {model} for piper voice.")
-
-voice = PiperVoice.load(f"{model}.onnx")
-
-# in piper, 0.8 is faster and 1.3 is slower.
-# naturally, bigger number should be faster so we reverse it.
-# 1.3 -> 0.8 and 0.8 -> 1.3 etc
-voice.config.length_scale = 1 - (flags.voiceSpeed - 1.0)
+voice2 = loadPiperVoice(f"en_GB-alba-medium.onnx")
 
 with open(f"{promptsDirectory}/{flags.prompt}.txt", "r") as promptFile:
     prompt = promptFile.read()
@@ -188,6 +213,13 @@ userMessageHistory = [
         "content": prompt
     }
 ]
+
+lastIdleMessageTime = 0
+nextIdleMessageDelay = flags.idleIntervalMin
+lastIdleMessage = "Karnaka Station, this is research command, radio check."
+lastIdleSpeaker = None
+
+micStream = None
 
 lastUnit = None
 
@@ -283,18 +315,27 @@ def endTransmit():
         else:
             playSound(f"mdc/{flags.mdcEnd}")
 
-def promptResponse(string, messageHistoryToUse = None):
+def promptResponse(string, messageHistoryToUse):
     startTime = time.time()
 
     print("Prompting response...")
 
-    if messageHistoryToUse is None:
-        messageHistoryToUse = userMessageHistory
-
-    messageHistoryToUse.append({
-        "role": "user",
-        "content": string
-    })
+    if messageHistoryToUse is not None:
+        messageHistoryToUse.append({
+            "role": "user",
+            "content": string
+        })
+    else:
+        messageHistoryToUse = [
+            {
+                "role": "system",
+                "content": prompt
+            },
+            {
+                "role": "user",
+                "content": string
+            }
+        ]
 
     request = requests.post(f"{flags.ollamaUri}/api/chat", json = {
         "model": flags.ollamaModel,
@@ -316,10 +357,11 @@ def promptResponse(string, messageHistoryToUse = None):
 
     response = response.get("message")["content"]
 
-    messageHistoryToUse.append({
-        "role": "assistant",
-        "content": response
-    })
+    if messageHistoryToUse is not None:
+        messageHistoryToUse.append({
+            "role": "assistant",
+            "content": response
+        })
 
     print(f"Response: {response}")
     return response
@@ -328,7 +370,7 @@ def resetMessageHistory():
     userMessageHistory[1:]
     print("Message history reset.")
 
-def speakResponse(text):
+def speakResponse(text, voice):
     global recordingDirectory
 
     startTime = time.time()
@@ -406,7 +448,11 @@ def appendToTranscript(text):
             transcriptFile.write(f"RX: {text}\n")
 
 def openMicrophoneStream():
-    stream = p.open(
+    global micStream
+
+    print("Opening micStream.")
+
+    micStream = p.open(
         format = pyaudio.paInt16,
         channels = 1,
         rate = 44100,
@@ -416,69 +462,79 @@ def openMicrophoneStream():
 
     # throw away the first chunk of data to avoid
     # recording being started immediately
-    stream.read(MIC_STREAM_CHUNK_SIZE, exception_on_overflow=False)
+    micStream.read(MIC_STREAM_CHUNK_SIZE, exception_on_overflow=False)
 
-    return stream
+def closeMicStream():
+    global micStream
+
+    print("Closing micStream.")
+
+    micStream.close()
 
 def processLoop():
     global lastUnit
+    global lastIdleMessage
+    global lastIdleSpeaker
+    global lastIdleMessageTime
+    global nextIdleMessageDelay
+    global micStream
 
     print("Beginning process loop")
 
     frames = []
     recording = False
-    start_time = None
-    last_detection_time = 0
+    recordingStartTime = None
+    lastDetectionTime = time.time()
     
-    micStream = openMicrophoneStream()
+    openMicrophoneStream()
 
     print("Started stream, beginning processing...")
-    print("") # new line to prevent audio level from overwriting things
 
     while True:
         data = micStream.read(MIC_STREAM_CHUNK_SIZE, exception_on_overflow=False)
 
-        current_time = time.time()
+        currentTime = time.time()
+        timeSinceLastDetection = currentTime - lastDetectionTime
         
         level = audioop.rms(data, 2)
         
         clearPreviousLine()
-        print(f"Audio level: {level}")
+        print(f"Audio level ({timeSinceLastDetection: .1f}s): {level}.")
 
         # sound is loud enough to record,
         # or the last detected sound was less than padDuration (eg 2 seconds) ago
-        if level > flags.threshold or last_detection_time + flags.padDuration > current_time:
+        if level > flags.threshold or (recording and lastDetectionTime + flags.padDuration > currentTime):
             if not recording:
                 clearPreviousLine()
-                print(f"Sound detected at level {level} starting recording...")
+                print(f"Sound detected at level {level} (threshold is {flags.threshold}) starting recording...")
                 print("") # new line to prevent audio level from overwriting things
-                start_time = current_time  # Initialize the start time
+                recordingStartTime = currentTime  # Initialize the start time
 
             recording = True
             frames.append(data)
 
             if level > flags.threshold:
-                last_detection_time = current_time
+                lastDetectionTime = currentTime
             
             # Check for max duration
-            if start_time and current_time - start_time >= flags.maxDuration:
+            if recordingStartTime and currentTime - recordingStartTime >= flags.maxDuration:
                 clearPreviousLine()
                 print("Max duration reached, stopping recording.")
                 recording = False
         
-        # sound is too quiet, or last detection + padDuration was earlier than the current time
+        # sound below threshold, or last detection + padDuration was earlier than the current time
         else:
             if recording:
-                duration = current_time - start_time
+                duration = currentTime - recordingStartTime
 
-                if last_detection_time + flags.padDuration < current_time:
+                if lastDetectionTime + flags.padDuration < currentTime:
                     if duration >= flags.minDuration:
                         totalProcessStart = time.time()
 
                         clearPreviousLine()
                         print(f"Sound stopped at level {level} with duration of {duration: .2f} seconds")
 
-                        micStream.close()
+                        closeMicStream()
 
                         # Save the audio
                         filename = getNewRecordingFilename()
@@ -501,7 +557,7 @@ def processLoop():
                         transcription = transcription["text"].strip(" .,\n").lower()
 
                         print(f"Transcription: \"{transcription}\"")
-                        print(f"Took {round(time.time() - transcribeStartTime, 2)}s")
+                        print(f"Transcription took {(time.time() - transcribeStartTime): .1f}s")
 
                         if not flags.saveReceivedAudio:
                             os.remove(f"{recordingDirectory}/rx-{filename}")
@@ -529,19 +585,19 @@ def processLoop():
                                 else: # repeat back what they said
                                     response = lastUnit + " unable to copy"
                             else: # repeat back what they said
-                                response = promptResponse(transcription)
+                                response = promptResponse(transcription, userMessageHistory)
 
                             appendToTranscript(f"TX: {response}")
 
-                            speakResponse(response)
+                            speakResponse(response, dispatcherVoice)
 
                         # if the length of the transcription is zero,
                         # check to see if we got an audio file at all.
-                        elif os.path.isfile(f"{recordingDirectory}/rx-{filename}"):
-                            # rename the received audio to failed so we know. failed can't come after filename because filename contains .wav
-                            os.rename(f"{recordingDirectory}/rx-{filename}", f"{recordingDirectory}/rx-failed-{filename}")
+                        #elif os.path.isfile(f"{recordingDirectory}/rx-{filename}"):
+                        #    # rename the received audio to failed so we know. failed can't come after filename because filename contains .wav
+                        #    os.rename(f"{recordingDirectory}/rx-{filename}", f"{recordingDirectory}/rx-failed-{filename}")
 
-                            playError()
+                        #    playError()
 
                         print(f"Total processing time: {round(time.time() - totalProcessStart, 2)}s")
                     else:
@@ -550,18 +606,36 @@ def processLoop():
                 # Reset recording states
                 frames = []
                 recording = False
-                start_time = None
-                last_detection_time = 0
-                micStream = openMicrophoneStream()
+                recordingStartTime = None
+                openMicrophoneStream()
                 print("Resetting recording state") # new line to prevent audio level from overwriting things
+            else: # if not recording, do idle messages
+                if flags.idleDelay > 0 and currentTime > lastDetectionTime + flags.idleDelay:
+                    if currentTime > lastIdleMessageTime + nextIdleMessageDelay:
+                        print(f"Responding to last idle message.")
+
+                        if lastIdleSpeaker is voice2:
+                            lastIdleSpeaker = dispatcherVoice
+                        else:
+                            lastIdleSpeaker = voice2
+
+                        lastIdleMessage = promptResponse(lastIdleMessage, None)
+                        speakResponse(lastIdleMessage, lastIdleSpeaker)
+
+                        lastIdleMessageTime  = time.time()
+                        nextIdleMessageDelay = random.randint(flags.idleIntervalMin, flags.idleIntervalMax)
+
+                        print(f"Next idle message delay: {nextIdleMessageDelay}s")
+                        print("") # new line to prevent audio level from overwriting things
 
 while True:
     try:
         processLoop()
     except Exception as e:
-        print(f"A {type(e).__name__} exception occurred:", e)
+        print(f"A {type(e).__name__} exception occurred on line {e.__traceback__.__dict__}:", e)
         print("The stream will be restarted.")
         playError()
     except KeyboardInterrupt:
        print("KeyboardInterrupt quit")
+       closeMicStream()
        exit()
