@@ -172,8 +172,14 @@ MIC_STREAM_CHUNK_SIZE = 1024
 if flags.voiceEngine == "piper":
     from piper.voice import PiperVoice
 
-    model = f"{voicesDirectory}/{flags.piperVoice}.onnx"
-    voice = PiperVoice.load(model)
+    if flags.piperVoice == "random":
+        model = f"{voicesDirectory}/{random.choice([f for f in os.listdir(f"{voicesDirectory}/") if not f.startswith(".") and not f.endswith(".json")])[:-5]}"
+    else:
+        model = f"{voicesDirectory}/{flags.piperVoice}"
+
+    print(f"Chose model {model} for piper voice.")
+
+    voice = PiperVoice.load(f"{model}.onnx")
 
     # in piper, 0.8 is faster and 1.3 is slower.
     # this formula reverses the number so that
