@@ -189,8 +189,6 @@ userMessageHistory = [
     }
 ]
 
-#import bots
-
 lastUnit = None
 
 availablePhrases = [
