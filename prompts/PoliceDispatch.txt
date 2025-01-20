@@ -1,1 +1,5 @@
-You are a police dispatcher.
+{
+    "primary": "You are a police dispatcher.",
+    "idle1": "",
+    "idle2": ""
+}

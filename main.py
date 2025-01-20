@@ -132,16 +132,16 @@ parser.add_argument("-idleDelay",
     help = "how long to wait before beginning idle chat using the llm. -1 disables idle messages"
 )
 
-parser.add_argument("-idleIntervalMax",
-    type = int,
-    default = 60,
-    help = "max time before next idle message"
-)
-
 parser.add_argument("-idleIntervalMin",
     type = int,
     default = 5,
     help = "minimum time between idle messages"
+)
+
+parser.add_argument("-idleIntervalMax",
+    type = int,
+    default = 60,
+    help = "max time before next idle message"
 )
 
 parser.add_argument("-initialStreamChunkDiscardCount",
@@ -161,6 +161,7 @@ print(flags.__dict__)
 
 import audioop
 import datetime
+import json
 import os
 from piper.voice import PiperVoice
 import pyaudio
@@ -212,11 +213,12 @@ voice2 = loadPiperVoice(f"en_GB-alba-medium.onnx")
 
 with open(f"{promptsDirectory}/{flags.prompt}.txt", "r") as promptFile:
     prompt = promptFile.read()
+    prompt = json.loads(prompt)
 
 userMessageHistory = [
     {
         "role": "system",
-        "content": prompt
+        "content": prompt["primary"]
     }
 ]
 
@@ -321,31 +323,14 @@ def endTransmit():
         else:
             playSound(f"mdc/{flags.mdcEnd}")
 
-def promptResponse(string, messageHistoryToUse):
+def promptResponse(messageHistory):
     startTime = time.time()
 
     print("Prompting response...")
 
-    if messageHistoryToUse is not None:
-        messageHistoryToUse.append({
-            "role": "user",
-            "content": string
-        })
-    else:
-        messageHistoryToUse = [
-            {
-                "role": "system",
-                "content": prompt
-            },
-            {
-                "role": "user",
-                "content": string
-            }
-        ]
-
     request = requests.post(f"{flags.ollamaUri}/api/chat", json = {
         "model": flags.ollamaModel,
-        "messages": messageHistoryToUse,
+        "messages": messageHistory,
         "stream": False,
     })
 
@@ -362,12 +347,6 @@ def promptResponse(string, messageHistoryToUse):
         raise Exception("Message from model was None.")
 
     response = response.get("message")["content"]
-
-    if messageHistoryToUse is not None:
-        messageHistoryToUse.append({
-            "role": "assistant",
-            "content": response
-        })
 
     print(f"Response: {response}")
     return response
@@ -571,6 +550,11 @@ def processLoop():
 
                         appendToTranscript(f"RX: {transcription}")
 
+                        userMessageHistory.append({
+                            "role": "user",
+                            "content": transcription
+                        })
+
                         if len(transcription) > 0:
                             if transcription == "innoculate shield pacify":
                                 resetMessageHistory()
@@ -592,9 +576,14 @@ def processLoop():
                                 else: # repeat back what they said
                                     response = lastUnit + " unable to copy"
                             else: # repeat back what they said
-                                response = promptResponse(transcription, userMessageHistory)
+                                response = promptResponse(userMessageHistory)
 
                             appendToTranscript(f"TX: {response}")
+
+                            userMessageHistory.append({
+                                "role": "assistant",
+                                "content": response
+                            })
 
                             speakResponse(response, dispatcherVoice)
 
@@ -617,7 +606,7 @@ def processLoop():
                 openMicrophoneStream()
                 print("Resetting recording state") # new line to prevent audio level from overwriting things
             else: # if not recording, do idle messages
-                if flags.idleDelay > 0 and currentTime > lastDetectionTime + flags.idleDelay:
+                if flags.idleDelay > -1 and currentTime > lastDetectionTime + flags.idleDelay:
                     if currentTime > lastIdleMessageTime + nextIdleMessageDelay:
                         print(f"Responding to last idle message.")
 
@@ -626,7 +615,23 @@ def processLoop():
                         else:
                             lastIdleSpeaker = voice2
 
-                        lastIdleMessage = promptResponse(lastIdleMessage, None)
+                        messages = [
+                            {
+                                "role": "system",
+                                "content": prompt["primary"]
+                            },
+                            {
+                                "role": "system",
+                                "content": "Reply to the next message with this context: " + prompt["idle1"] if lastIdleSpeaker is dispatcherVoice else prompt["idle2"]
+                            },
+                            {
+                                "role": "user",
+                                "content": lastIdleMessage
+                            }
+                        ]
+
+                        lastIdleMessage = promptResponse(messages)
+
                         speakResponse(lastIdleMessage, lastIdleSpeaker)
 
                         lastIdleMessageTime  = time.time()
