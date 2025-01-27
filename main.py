@@ -574,7 +574,7 @@ def processLoop():
                                     lastUnit = None
                                     continue # TODO: this causes an exception to be thrown, but that's okay because it sounds cool.
                                 else: # repeat back what they said
-                                    response = lastUnit + " unable to copy"
+                                    response = lastUnit + " unable to copy, please say again."
                             else: # repeat back what they said
                                 response = promptResponse(userMessageHistory)
 
