@@ -346,7 +346,7 @@ def promptResponse(messageHistory):
     elif response.get("message") is None:
         raise Exception("Message from model was None.")
 
-    response = response.get("message")["content"]
+    response = response.get("message")["content"].strip()
 
     print(f"Response: {response}")
     return response
